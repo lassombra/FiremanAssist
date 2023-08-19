@@ -27,7 +27,7 @@ namespace FireManAssist
                 Logger = modEntry.Logger;
                 WorldStreamingInit.LoadingFinished += Start;
                 UnloadWatcher.UnloadRequested += Stop;
-                if (WorldStreamingInit.IsLoaded)
+                if (WorldStreamingInit.Instance && WorldStreamingInit.IsLoaded)
                 {
                     Start();
                 }

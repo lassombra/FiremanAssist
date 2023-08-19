@@ -15,6 +15,7 @@ namespace FireManAssist
         {
             FireManAssist.Logger.Log("Starting LocoTracker");
             PlayerManager.CarChanged += PlayerManager_CarChanged;
+            PlayerManager_CarChanged(PlayerManager.Car);
         }
         private void Stop()
         {
