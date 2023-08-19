@@ -1,0 +1,6 @@
+﻿{
+  "Id": "FiremanAssistant",
+  "Version": "0.0.1",
+  "EntryMethod": "FireManAssist.FireManAssist.Load",
+  "DisplayName": "Water Protection"
+}
