@@ -1,4 +1,5 @@
-﻿using DV.ThingTypes;
+﻿using DV.Logic.Job;
+using DV.ThingTypes;
 using RootMotion;
 using System;
 using System.Collections.Generic;
@@ -11,6 +12,7 @@ namespace FireManAssist
 {
     internal class LocoTracker
     {
+        private readonly HashSet<TrainCar> monitoredCars = new HashSet<TrainCar>();
         private void Start()
         {
             FireManAssist.Logger.Log("Starting LocoTracker");
@@ -20,36 +22,86 @@ namespace FireManAssist
         private void Stop()
         {
             FireManAssist.Logger.Log("Stopping LocoTracker");
+            monitoredCars.ToList().ForEach(car =>
+            {
+                car.TrainsetChanged -= Car_TrainsetChanged;
+            });
             PlayerManager.CarChanged -= PlayerManager_CarChanged;
         }
 
         private void PlayerManager_CarChanged(TrainCar car)
         {
+            bool attached = false;
             if (null != car)
             {
-                switch (car.carType)
+                attached = MaybeAttachWaterMonitor(car);
+            }
+            if (attached)
+            {
+                car.trainset.locoIndices.ForEach(i =>
                 {
-                    case TrainCarType.LocoSteamHeavy:
-                    case TrainCarType.LocoS060:
-                        MaybeAttachWaterMonitor(car);
-                        break;
-                    default:
-                        break;
-                }
+                    var loco = car.trainset.cars[i];
+                    if (null != loco)
+                    {
+                        MaybeAttachWaterMonitor(loco);
+                    }
+                });
                 
             }
         }
-        private void MaybeAttachWaterMonitor(TrainCar loco)
+
+        private void Car_TrainsetChanged(Trainset trainset)
+        {
+            trainset?.locoIndices.ForEach(i =>
+                {
+                    var loco = trainset.cars[i];
+                    if (null != loco)
+                    {
+                        MaybeAttachWaterMonitor(loco);
+                    }
+                });
+        }
+
+        private bool MaybeAttachWaterMonitor(TrainCar loco)
         {
             if (null != loco)
             {
-                var waterMonitor = loco.GetComponent<WaterMonitor>();
-                if (null == waterMonitor)
+                FireManAssist.Logger.Log("MaybeAttachWaterMonitor " + loco.name);
+                bool supportedLoco = false;
+                switch(loco.carType)
                 {
-                    FireManAssist.Logger.Log("Attaching WaterMonitor to " + loco.name);
-                    loco.gameObject.AddComponent<WaterMonitor>();
+                    case TrainCarType.LocoS060:
+                    case TrainCarType.LocoSteamHeavy:
+                        supportedLoco = true;
+                        break;
+                    default:
+                        supportedLoco = false;
+                        break;
+                }
+                if (supportedLoco && null == loco.GetComponent<WaterMonitor>())
+                {
+                    AttachMonitor(loco);
+                    return true;
                 }
             }
+            return false;
+        }
+
+        private void AttachMonitor(TrainCar loco)
+        {
+            FireManAssist.Logger.Log("Attaching WaterMonitor to " + loco.name);
+            loco.gameObject.AddComponent<WaterMonitor>();
+            loco.OnDestroyCar += Loco_OnDestroyCar;
+            monitoredCars.Add(loco);
+            loco.TrainsetChanged += Car_TrainsetChanged;
+        }
+
+        private void Loco_OnDestroyCar(TrainCar car)
+        {
+            FireManAssist.Logger.Log("Loco_OnDestroyCar " + car.name);
+            car.OnDestroyCar -= Loco_OnDestroyCar;
+            car.TrainsetChanged -= Car_TrainsetChanged;
+            monitoredCars.Remove(car);
         }
         private static LocoTracker instance;
         public static void Create()
