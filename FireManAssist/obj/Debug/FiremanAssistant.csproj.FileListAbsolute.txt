@@ -1,7 +1,0 @@
-C:\Program Files (x86)\Steam\steamapps\common\Derail Valley\Mods\FiremanAssistant\info.json
-C:\Program Files (x86)\Steam\steamapps\common\Derail Valley\Mods\FiremanAssistant\FiremanAssistant.dll
-C:\Program Files (x86)\Steam\steamapps\common\Derail Valley\Mods\FiremanAssistant\FiremanAssistant.pdb
-C:\Users\Brian\source\repos\FireManAssist\FireManAssist\obj\Debug\FiremanAssistant.csproj.AssemblyReference.cache
-C:\Users\Brian\source\repos\FireManAssist\FireManAssist\obj\Debug\FiremanAssistant.csproj.CoreCompileInputs.cache
-C:\Users\Brian\source\repos\FireManAssist\FireManAssist\obj\Debug\FiremanAssistant.dll
-C:\Users\Brian\source\repos\FireManAssist\FireManAssist\obj\Debug\FiremanAssistant.pdb
