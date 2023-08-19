@@ -12,7 +12,8 @@ namespace FireManAssist
 {
     internal class WaterMonitor : MonoBehaviour
     {
-        private Port port;
+        private Port waterPort;
+        private Port firePort;
         private Port injector;
         private Port blowdown;
 
@@ -32,22 +33,26 @@ namespace FireManAssist
                 FireManAssist.Logger.Log("No SimController found");
                 return;
             }
-            if (!simController.SimulationFlow.TryGetPort("boiler.WATER_LEVEL_NORMALIZED", out this.port))
+            if (!simController.SimulationFlow.TryGetPort("boiler.WATER_LEVEL_NORMALIZED", out this.waterPort))
             {
                 Destroy(this);
                 FireManAssist.Logger.Log("Water port not found");
                 return;
             }
+            simController.SimulationFlow.TryGetPort("firebox.FIRE_ON", out this.firePort);
             simController.SimulationFlow.TryGetPort("injector.EXT_IN", out this.injector);
             simController.SimulationFlow.TryGetPort("blowdown.EXT_IN", out this.blowdown);
         }
         public void Update()
         {
-            var waterLevel = port.Value;
+            var waterLevel = waterPort.Value;
             if (waterLevel < 0.75f)
             {
                 blowdown.ExternalValueUpdate(0f);
-                injector.ExternalValueUpdate(1f);
+                if (firePort.Value == 1f)
+                {
+                    injector.ExternalValueUpdate(1f);
+                }
             }
             else if (waterLevel > 0.84f)
             {
