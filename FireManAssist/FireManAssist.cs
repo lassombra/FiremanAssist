@@ -12,12 +12,24 @@ namespace FireManAssist
     [EnableReloading]
     public class FireManAssist
     {
-        public static ModLogger Logger { get; private set; }
+        internal static ModLogger Logger { get; private set; }
+        internal static Settings settings { get; private set; }
         static bool Load(UnityModManager.ModEntry modEntry)
         {
             modEntry.OnToggle = OnToggle;
-
+            settings = Settings.Load<Settings>(modEntry);
+            modEntry.OnGUI = OnGUI;
+            modEntry.OnSaveGUI = OnSaveGUI;
             return true;
+        }
+
+        public static void OnGUI(UnityModManager.ModEntry modEntry)
+        {
+            settings.Draw(modEntry);
+        }
+        public static void OnSaveGUI(UnityModManager.ModEntry modEntry)
+        {
+            settings.Save(modEntry);
         }
 
         static bool OnToggle(UnityModManager.ModEntry modEntry, bool value)
