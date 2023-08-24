@@ -111,6 +111,12 @@ namespace FireManAssist
             }
         }
 
+        /// <summary>
+        /// Takes in the current water level and a target curve to determine the goal injector value
+        /// Also provides a great single place to tune the injector curves.
+        /// </summary>
+        /// <param name="curve">The curve to use to determine the injector target</param>
+        /// <param name="waterLevel">The current water level</param>
         public static float CalculateInjectorTargetCurve(float waterLevel, WaterCurve curve)
         {
             switch (curve)
@@ -131,6 +137,8 @@ namespace FireManAssist
         /// </summary>
         /// <param name="waterLevel">Normalized water level as shown in the sight glass</param>
         /// <param name="factor">exponential factor by which to reduce injector level based on current situation, a value of 2.0f square roots the result, providing a gentle but still weighted curve</param>
+        /// <param name="maxRange">Maximum water level to allow, default 0.85, at or above this level the injector will be fully closed</param>
+        /// <param name="minRange">Minimum water level to allow, default 0.75, at or below this level the injector will be fully open</param>
         /// <returns>Normalized injector target, rounded to 1 decimal place to avoid injector twitching.</returns>
         public static float CalculateInjectorTarget(float waterLevel, float factor = 2.0f, float minRange = 0.75f, float maxRange = 0.81667f)
         {
