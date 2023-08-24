@@ -10,12 +10,27 @@ using UnityEngine;
 
 namespace FireManAssist
 {
-    internal class WaterMonitor : MonoBehaviour
+    public class WaterMonitor : MonoBehaviour
     {
+        // The water level as handed to the sight glass
         private Port waterPort;
+        // The fire port, to determine if the fire is on
         private Port firePort;
+
+        // The injector port, to set the injector
         private Port injector;
+        // The blowdown port, to turn off blowdown if on at minimum
         private Port blowdown;
+
+        // run counter and SKIP_TICKS are used to reduce CPU load by only running once SKIP_TICKS has elapsed
+        private int runCounter = 0;
+        private static readonly int SKIP_TICKS = 5;
+
+        // Whether or not the "full" mode is actively running
+        // provided mod settings allow "full" mode, this will be true
+        // whenever the fire is on, and will remain true for one more update after the fire is turned off
+        // that update may be delayed by the SKIP_TICKS counter
+        private bool running = false;
 
         public void Start()
         {
@@ -45,19 +60,102 @@ namespace FireManAssist
         }
         public void Update()
         {
-            var waterLevel = waterPort.Value;
+            // skip most of the time, to reduce CPU load
+            if (runCounter < SKIP_TICKS || FireManAssist.Settings.WaterMode == WaterAssistMode.None)
+            {
+                runCounter++;
+                return;
+            }
+            runCounter = 0;
+            float injectorTarget = -1.0f;
+            float waterLevel = waterPort.Value;
+            switch (FireManAssist.Settings.WaterMode)
+            {
+                case WaterAssistMode.Full:
+                    injectorTarget = FullHandler(waterLevel);
+                    goto case WaterAssistMode.Over_Under_Protection;
+                case WaterAssistMode.Over_Under_Protection:
+                    injectorTarget = OverUnderHandler(waterLevel, injectorTarget);
+                    goto case WaterAssistMode.No_Explosions;
+                case WaterAssistMode.No_Explosions:
+                    injectorTarget = MinimumHandler(waterLevel, injectorTarget);
+                    break;
+            }
+            if (injectorTarget >= 0.0f && injector.Value != injectorTarget)
+            {
+                injector.ExternalValueUpdate(injectorTarget);
+            }
+        }
+        
+        /// <summary>
+        /// Determines value to set injector to based on water level.
+        /// current implementation only operates on the range of 0.75 to 0.85 (0..1 range returned)
+        /// </summary>
+        /// <param name="waterLevel">Normalized water level as shown in the sight glass</param>
+        /// <param name="factor">exponential factor by which to reduce injector level based on current situation, a value of 2.0f square roots the result, providing a gentle but still weighted curve</param>
+        /// <returns>Normalized injector target, rounded to 1 decimal place to avoid injector twitching.</returns>
+        public static float CalculateInjectorTarget(float waterLevel, float factor = 2.0f)
+        {
+            const float MaxRange = 0.81667f;
+            const float MinRange = 0.75f;
+            // baseWaterLevel is current water level minus the bottom of the glass
+            // this creates a range of 0.0 to 1.0 (0.75 to 0.85)
+            // Min and Max are used to clip the range at [0.0..1.0]
+            var normalizedGlassLevel = Math.Max(0.0f, Math.Min(1.0f, ((waterLevel - MinRange) / (MaxRange - MinRange))));
+
+            // target injector level is 1.0 to 0.0 for water level 0.75 to 0.85 or normalized glass level 0.0 to 1.0.
+            // however the curve should be weighted towards the lower end of the range by the provided factor
+            // so take the result to the power of 1/factor (square root for 2)
+            var target = Mathf.Pow(normalizedGlassLevel, 1.0f / factor);
+            // and invert it to get the injector level
+            target = 1 - target;
+            // round to 1 decimal place to avoid injector twitching
+            return (float)Math.Round(target, 1);
+        }
+        private float FullHandler(float waterLevel)
+        {
+            // Only do full work if fire is on
+            // if the fire is out, fall back to over/under protection
+            if (firePort.Value != 0f)
+            {
+                running = true;
+                // Determine target water level range to determine injector level
+                // then set the injector, and then fall through to OverUnderHandler
+                return CalculateInjectorTarget(waterLevel);
+            } else
+            {
+                // we had a fire, now we don't, initially turn off the injector.  User can turn it back on (to prime for example) but otherwise we'll just fall through to OverUnderHandler
+                if (running)
+                {
+                    running = false;
+                    return 0.0f;
+                }
+            }
+            return -1.0f;
+        }
+        private float OverUnderHandler(float waterLevel, float injectorTarget)
+        {
+            // If water level is above 0.85, turn off injector.
+            // otherwise fall through to MinimumHandler
+            if (waterLevel > 0.85f)
+            {
+                return 0.0f;
+            }
+            return injectorTarget;
+        }
+        private float MinimumHandler(float waterLevel, float injectorTarget)
+        {
+            // If water level is below 0.75, turn off blowdown.
+            // if fire is on also, turn on injector
             if (waterLevel < 0.75f)
             {
                 blowdown.ExternalValueUpdate(0f);
                 if (firePort.Value == 1f)
                 {
-                    injector.ExternalValueUpdate(1f);
+                    return 1.0f;
                 }
             }
-            else if (waterLevel > 0.84f)
-            {
-                injector.ExternalValueUpdate(0f);
-            }
+            return injectorTarget;
         }
     }
 }

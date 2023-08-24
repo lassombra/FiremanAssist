@@ -13,11 +13,11 @@ namespace FireManAssist
     public class FireManAssist
     {
         internal static ModLogger Logger { get; private set; }
-        internal static Settings settings { get; private set; }
+        internal static Settings Settings { get; private set; }
         static bool Load(UnityModManager.ModEntry modEntry)
         {
             modEntry.OnToggle = OnToggle;
-            settings = Settings.Load<Settings>(modEntry);
+            Settings = Settings.Load<Settings>(modEntry);
             modEntry.OnGUI = OnGUI;
             modEntry.OnSaveGUI = OnSaveGUI;
             return true;
@@ -25,11 +25,11 @@ namespace FireManAssist
 
         public static void OnGUI(UnityModManager.ModEntry modEntry)
         {
-            settings.Draw(modEntry);
+            Settings.Draw(modEntry);
         }
         public static void OnSaveGUI(UnityModManager.ModEntry modEntry)
         {
-            settings.Save(modEntry);
+            Settings.Save(modEntry);
         }
 
         static bool OnToggle(UnityModManager.ModEntry modEntry, bool value)
