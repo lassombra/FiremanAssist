@@ -10,6 +10,13 @@ using UnityEngine;
 
 namespace FireManAssist
 {
+    public enum WaterCurve
+    {
+        Default,
+        LowPressure,
+        HighPressure
+    }
+
     public class WaterMonitor : MonoBehaviour
     {
         // The water level as handed to the sight glass
@@ -21,6 +28,9 @@ namespace FireManAssist
         private Port injector;
         // The blowdown port, to turn off blowdown if on at minimum
         private Port blowdown;
+
+        // The boiler pressure port, used to monitor the boiler pressure and adjust the injector curves accordingly
+        private Port boilerPressure;
 
         // run counter and SKIP_TICKS are used to reduce CPU load by only running once SKIP_TICKS has elapsed
         private int runCounter = 0;
@@ -59,9 +69,11 @@ namespace FireManAssist
                 FireManAssist.Logger.Log("Water port not found");
                 return;
             }
+            //setup ports we need
             simController.SimulationFlow.TryGetPort("firebox.FIRE_ON", out this.firePort);
             simController.SimulationFlow.TryGetPort("injector.EXT_IN", out this.injector);
             simController.SimulationFlow.TryGetPort("blowdown.EXT_IN", out this.blowdown);
+            simController.SimulationFlow.TryGetPort("boiler.PRESSURE", out this.boilerPressure);
         }
         public void Update()
         {
@@ -98,7 +110,21 @@ namespace FireManAssist
                 lastSetInjector = injectorTarget;
             }
         }
-        
+
+        public static float CalculateInjectorTargetCurve(float waterLevel, WaterCurve curve)
+        {
+            switch (curve)
+            {
+                case WaterCurve.LowPressure:
+                    return CalculateInjectorTarget(waterLevel, 4.0f, 0.75f, 0.8f);
+                case WaterCurve.HighPressure:
+                    return CalculateInjectorTarget(waterLevel, 1 / 3.0f, 0.8f, 0.85f);
+                case WaterCurve.Default:
+                default:
+                    return CalculateInjectorTarget(waterLevel, 2.0f, 0.75f, 0.81667f);
+            }
+        }
+
         /// <summary>
         /// Determines value to set injector to based on water level.
         /// current implementation only operates on the range of 0.75 to 0.85 (0..1 range returned)
@@ -106,14 +132,12 @@ namespace FireManAssist
         /// <param name="waterLevel">Normalized water level as shown in the sight glass</param>
         /// <param name="factor">exponential factor by which to reduce injector level based on current situation, a value of 2.0f square roots the result, providing a gentle but still weighted curve</param>
         /// <returns>Normalized injector target, rounded to 1 decimal place to avoid injector twitching.</returns>
-        public static float CalculateInjectorTarget(float waterLevel, float factor = 2.0f)
+        public static float CalculateInjectorTarget(float waterLevel, float factor = 2.0f, float minRange = 0.75f, float maxRange = 0.81667f)
         {
-            const float MaxRange = 0.81667f;
-            const float MinRange = 0.75f;
             // baseWaterLevel is current water level minus the bottom of the glass
             // this creates a range of 0.0 to 1.0 (0.75 to 0.85)
             // Min and Max are used to clip the range at [0.0..1.0]
-            var normalizedGlassLevel = Math.Max(0.0f, Math.Min(1.0f, ((waterLevel - MinRange) / (MaxRange - MinRange))));
+            var normalizedGlassLevel = Math.Max(0.0f, Math.Min(1.0f, ((waterLevel - minRange) / (maxRange- minRange))));
 
             // target injector level is 1.0 to 0.0 for water level 0.75 to 0.85 or normalized glass level 0.0 to 1.0.
             // however the curve should be weighted towards the lower end of the range by the provided factor
@@ -131,9 +155,13 @@ namespace FireManAssist
             if (firePort.Value != 0f && !overrideTriggered)
             {
                 running = true;
-                // Determine target water level range to determine injector level
-                // then set the injector, and then fall through to OverUnderHandler
-                return CalculateInjectorTarget(waterLevel);
+                if (boilerPressure.Value >= 14f) { 
+                    // if boiler pressure is above 14, use high pressure curve
+                    return CalculateInjectorTargetCurve(waterLevel, WaterCurve.HighPressure);
+                } else
+                {
+                    return CalculateInjectorTargetCurve(waterLevel, WaterCurve.Default);
+                }
             } else
             {
                 // we had a fire, now we don't, initially turn off the injector.  User can turn it back on (to prime for example) but otherwise we'll just fall through to OverUnderHandler
