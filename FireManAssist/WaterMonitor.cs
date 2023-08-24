@@ -32,6 +32,11 @@ namespace FireManAssist
         // that update may be delayed by the SKIP_TICKS counter
         private bool running = false;
 
+        // true if an override has triggered, turned false by over/under protection which can reenable full service
+        private bool overrideTriggered = false;
+        // the last set injector value, used to determine if the injector has been manually set
+        private float lastSetInjector = -1.0f;
+
         public void Start()
         {
             var trainCar = this.GetComponentInParent<TrainCar>();
@@ -67,6 +72,12 @@ namespace FireManAssist
                 return;
             }
             runCounter = 0;
+            if (lastSetInjector >= 0.0f && Math.Round(injector.Value, 1) != Math.Round(lastSetInjector, 1))
+            {
+                // injector has been manually set, disable full service
+                running = false;
+                overrideTriggered = true;
+            }
             float injectorTarget = -1.0f;
             float waterLevel = waterPort.Value;
             switch (FireManAssist.Settings.WaterMode)
@@ -84,6 +95,7 @@ namespace FireManAssist
             if (injectorTarget >= 0.0f && injector.Value != injectorTarget)
             {
                 injector.ExternalValueUpdate(injectorTarget);
+                lastSetInjector = injectorTarget;
             }
         }
         
@@ -115,8 +127,8 @@ namespace FireManAssist
         private float FullHandler(float waterLevel)
         {
             // Only do full work if fire is on
-            // if the fire is out, fall back to over/under protection
-            if (firePort.Value != 0f)
+            // if the fire is out, or override triggered fall back to over/under protection
+            if (firePort.Value != 0f && !overrideTriggered)
             {
                 running = true;
                 // Determine target water level range to determine injector level
@@ -139,6 +151,7 @@ namespace FireManAssist
             // otherwise fall through to MinimumHandler
             if (waterLevel > 0.85f)
             {
+                overrideTriggered = false;
                 return 0.0f;
             }
             return injectorTarget;
@@ -152,6 +165,8 @@ namespace FireManAssist
                 blowdown.ExternalValueUpdate(0f);
                 if (firePort.Value == 1f)
                 {
+                    // override will only reset if the fire is on
+                    overrideTriggered = false;
                     return 1.0f;
                 }
             }
