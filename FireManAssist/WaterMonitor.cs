@@ -49,6 +49,7 @@ namespace FireManAssist
 
         // Whether or not we've gone into low pressure mode.  This mode is triggered by a dropping pressure trend while under 13bar and will not be exited until the pressure is above 13bar
         private bool lowPressure = false;
+        private bool highPressure = false;
         private readonly PressureTracker pressureTracker = new PressureTracker();
 
         public void Start()
@@ -180,6 +181,7 @@ namespace FireManAssist
                 if (pressure < 12.0f)
                 {
                     curve = WaterCurve.LowPressure;
+                    highPressure = false;
                 }
                 else if (pressure < 13.0f)
                 {
@@ -187,16 +189,22 @@ namespace FireManAssist
                     {
                         curve = WaterCurve.LowPressure;
                         lowPressure = true;
+                        highPressure = false;
                     }
                 }
-                else if (pressure > 14.0f)
+                else if (pressure > 13.8f)
                 {
                     curve = WaterCurve.HighPressure;
                     lowPressure = false;
+                    highPressure = true;
+                } else if (highPressure && pressure >= 13.5f)
+                {
+                    curve = WaterCurve.HighPressure;
                 } else
                 {
                     curve = WaterCurve.Default;
                     lowPressure = false;
+                    highPressure = false;
                 }
                 return CalculateInjectorTargetCurve(waterLevel, curve);
             } else
