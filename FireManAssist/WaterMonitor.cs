@@ -47,6 +47,10 @@ namespace FireManAssist
         // the last set injector value, used to determine if the injector has been manually set
         private float lastSetInjector = -1.0f;
 
+        // Whether or not we've gone into low pressure mode.  This mode is triggered by a dropping pressure trend while under 13bar and will not be exited until the pressure is above 13bar
+        private bool lowPressure = false;
+        private readonly PressureTracker pressureTracker = new PressureTracker();
+
         public void Start()
         {
             var trainCar = this.GetComponentInParent<TrainCar>();
@@ -163,13 +167,37 @@ namespace FireManAssist
             if (firePort.Value != 0f && !overrideTriggered)
             {
                 running = true;
-                if (boilerPressure.Value >= 14f) { 
-                    // if boiler pressure is above 14, use high pressure curve
-                    return CalculateInjectorTargetCurve(waterLevel, WaterCurve.HighPressure);
+                var pressure = boilerPressure.Value;
+                var trend = pressureTracker.UpdateAndCheckTrend(pressure);
+                var curve = WaterCurve.Default;
+                // rule sequence is:
+                // 1) If boiler is below 12 bar, use low pressure curve,
+                // 2) If boiler is below 13 bar and above 12 bar, check pressure trend - if pressure is falling, or our lowPressure flag is set, use low pressure curve
+                // 3) If boiler is above 13 bar, reset lowPressure flag
+                // 4) If boiler is above 14 bar, use high pressure curve
+                // 5) if all else fails, use default curve
+                if (pressure < 12.0f)
+                {
+                    curve = WaterCurve.LowPressure;
+                }
+                else if (pressure < 13.0f)
+                {
+                    if (trend == Trend.Falling || lowPressure)
+                    {
+                        curve = WaterCurve.LowPressure;
+                        lowPressure = true;
+                    }
+                }
+                else if (pressure > 14.0f)
+                {
+                    curve = WaterCurve.HighPressure;
+                    lowPressure = false;
                 } else
                 {
-                    return CalculateInjectorTargetCurve(waterLevel, WaterCurve.Default);
+                    curve = WaterCurve.Default;
+                    lowPressure = false;
                 }
+                return CalculateInjectorTargetCurve(waterLevel, curve);
             } else
             {
                 // we had a fire, now we don't, initially turn off the injector.  User can turn it back on (to prime for example) but otherwise we'll just fall through to OverUnderHandler
