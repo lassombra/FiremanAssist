@@ -82,19 +82,23 @@ namespace FireManAssist
         }
         public void Update()
         {
-            // skip most of the time, to reduce CPU load
-            if (runCounter < SKIP_TICKS || FireManAssist.Settings.WaterMode == WaterAssistMode.None)
-            {
-                runCounter++;
-                return;
-            }
-            runCounter = 0;
-            if (lastSetInjector >= 0.0f && Math.Round(injector.Value, 1) != Math.Round(lastSetInjector, 1))
+            if (lastSetInjector >= 0.0f && Math.Round(injector.Value, 1) != Math.Round(lastSetInjector, 1) && FireManAssist.Settings.InjectorMode == InjectorOverrideMode.Complete)
             {
                 // injector has been manually set, disable full service
                 running = false;
                 overrideTriggered = true;
             }
+            // skip most of the time, to reduce CPU load
+            if (runCounter < SKIP_TICKS || FireManAssist.Settings.WaterMode == WaterAssistMode.None)
+            {
+                runCounter++;
+                if (FireManAssist.Settings.InjectorMode == InjectorOverrideMode.None && lastSetInjector >= 0.0f)
+                {
+                    injector.ExternalValueUpdate(lastSetInjector);
+                }
+                return;
+            }
+            runCounter = 0;
             float injectorTarget = -1.0f;
             float waterLevel = waterPort.Value;
             switch (FireManAssist.Settings.WaterMode)
@@ -109,10 +113,16 @@ namespace FireManAssist
                     injectorTarget = MinimumHandler(waterLevel, injectorTarget);
                     break;
             }
-            if (injectorTarget >= 0.0f && injector.Value != injectorTarget)
+            // if we have a target, and it's a new target, set the injector.
+            if (injectorTarget >= 0.0f && lastSetInjector != injectorTarget || (0.75f > boilerPressure.Value || 0.85f < boilerPressure.Value))
             {
                 injector.ExternalValueUpdate(injectorTarget);
                 lastSetInjector = injectorTarget;
+            }
+            // if override is disabled, force an update
+            if (FireManAssist.Settings.InjectorMode == InjectorOverrideMode.None)
+            {
+                injector.ExternalValueUpdate(lastSetInjector);
             }
         }
 

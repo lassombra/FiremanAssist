@@ -14,9 +14,16 @@ namespace FireManAssist
         Over_Under_Protection,
         Full
     }
+    public enum InjectorOverrideMode
+    {
+        None,
+        Temporary,
+        Complete
+    }
     public class Settings : UnityModManager.ModSettings, IDrawable
     {
-        [Draw(DrawType.ToggleGroup)] public WaterAssistMode WaterMode = WaterAssistMode.Over_Under_Protection;
+        [Draw(DrawType.ToggleGroup)] public WaterAssistMode WaterMode = WaterAssistMode.Full;
+        [Draw(DrawType.ToggleGroup, Label = "Injector override Mode")] public InjectorOverrideMode InjectorMode = InjectorOverrideMode.Temporary;
 
         public void OnChange()
         { }
