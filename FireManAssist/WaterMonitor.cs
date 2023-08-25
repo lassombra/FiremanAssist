@@ -190,8 +190,14 @@ namespace FireManAssist
                 // 5) if all else fails, use default curve
                 if (pressure < 12.0f)
                 {
-                    curve = WaterCurve.LowPressure;
                     highPressure = false;
+                    if (waterLevel < 0.75f)
+                    {
+                        return 1.0f;
+                    } else
+                    {
+                        return 0.0f;
+                    }
                 }
                 else if (pressure < 13.0f)
                 {
