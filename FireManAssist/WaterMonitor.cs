@@ -167,7 +167,8 @@ namespace FireManAssist
             if (firePort.Value != 0f && !overrideTriggered)
             {
                 running = true;
-                var pressure = boilerPressure.Value;
+                // pressure is reported as 1-19, but we want 0-18 (0-18 bar);
+                var pressure = boilerPressure.Value - 1.0f;
                 var trend = pressureTracker.UpdateAndCheckTrend(pressure);
                 var curve = WaterCurve.Default;
                 // rule sequence is:
