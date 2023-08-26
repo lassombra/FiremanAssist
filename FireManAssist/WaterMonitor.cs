@@ -1,5 +1,6 @@
 ﻿using DV.HUD;
 using DV.Simulation.Cars;
+using LocoSim.Definitions;
 using LocoSim.Implementations;
 using System;
 using System.Collections.Generic;
@@ -12,9 +13,14 @@ namespace FireManAssist
 {
     public enum WaterCurve
     {
+        // Normal operating range
         Default,
+        // Pressure is dropping, or has dropped below 12 bar
         LowPressure,
-        HighPressure
+        // pressure is nearly at maximum
+        HighPressure,
+        // pressure is just building up, let the fire warm up first
+        Startup
     }
 
     public class WaterMonitor : MonoBehaviour
@@ -52,6 +58,8 @@ namespace FireManAssist
         private bool highPressure = false;
         private readonly PressureTracker pressureTracker = new PressureTracker();
 
+        //private BoilerDefinition boilerDefinition;
+
         public void Start()
         {
             var trainCar = this.GetComponentInParent<TrainCar>();
@@ -74,6 +82,7 @@ namespace FireManAssist
                 FireManAssist.Logger.Log("Water port not found");
                 return;
             }
+            //boilerDefinition = trainCar.GetComponentInChildren<BoilerDefinition>();
             //setup ports we need
             simController.SimulationFlow.TryGetPort("firebox.FIRE_ON", out this.firePort);
             simController.SimulationFlow.TryGetPort("injector.EXT_IN", out this.injector);
@@ -137,12 +146,14 @@ namespace FireManAssist
             switch (curve)
             {
                 case WaterCurve.LowPressure:
-                    return CalculateInjectorTarget(waterLevel, 4.0f, 0.75f, 0.8f);
+                    return CalculateInjectorTarget(waterLevel, 4.0f, 0.8f, 0.81667f);
                 case WaterCurve.HighPressure:
                     return CalculateInjectorTarget(waterLevel, 1 / 3.0f, 0.8f, 0.85f);
+                case WaterCurve.Startup:
+                    return CalculateInjectorTarget(waterLevel, 4.0f, 0.75f, 0.77f);
                 case WaterCurve.Default:
                 default:
-                    return CalculateInjectorTarget(waterLevel, 2.0f, 0.75f, 0.81667f);
+                    return CalculateInjectorTarget(waterLevel, 2.0f, 0.8f, 0.81667f);
             }
         }
 
@@ -188,16 +199,14 @@ namespace FireManAssist
                 // 3) If boiler is above 13 bar, reset lowPressure flag
                 // 4) If boiler is above 14 bar, use high pressure curve
                 // 5) if all else fails, use default curve
-                if (pressure < 12.0f)
+                if (pressure < 9.0f)
+                {
+                    curve = WaterCurve.Startup;
+                }
+                else if (pressure < 12.0f)
                 {
                     highPressure = false;
-                    if (waterLevel < 0.75f)
-                    {
-                        return 1.0f;
-                    } else
-                    {
-                        return 0.0f;
-                    }
+                    curve= WaterCurve.LowPressure;
                 }
                 else if (pressure < 13.0f)
                 {
