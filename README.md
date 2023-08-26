@@ -10,6 +10,12 @@ Right now this mod only protects against water issues and does so in a very naiv
  - Over/Underfill protection - Ensures you never let water get too low or too high.  _Might_ allow overfill if going downhill for an extended period of time, as it uses the same information the user has (the water glass)
  - Full management - Does its best to provide the optimum injector setting for the current situation.  Will aim to inject more water if the pressure is too high, and less water if the pressure is too low, to assist in firing in the sweet spot around 13 bar.  See notes about injector curves later.  If you manually adjust the injector more than about 5 percentage points, it'll disengage, dropping to over/under protection until one of those cases is hit.
 
+#### Injector Override
+The injector can be overriden by the user.  The manager has a few options for how it reacts:
+- None - Override will be overwritten each tick - expect weird flickering if you try to mess with it
+- Temporary - Override will stick until the manager decides it wants a new value.  Note that it is possible to overfill with override, but underfill is prevented
+- Complete - Override will turn off the smart management until a safety threshold is crossed, at which point it comes back.  This can be useful if you only want to override to for example run water down or overfill, but also lets you practice water management while the mod protects you from accidental over/under, and you can give it back to the mod when needed.
+
 #### Planned Features
 * Adding coal to keep fire going
 * Adding coal to heat fire if pressure drops
