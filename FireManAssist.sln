@@ -5,6 +5,8 @@ VisualStudioVersion = 17.7.34009.444
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FiremanAssistant", "FireManAssist\FiremanAssistant.csproj", "{D191021F-2D9D-44FF-AEF4-4FE892EDF55A}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FiremanAssistantTests", "FiremanAssistantTests\FiremanAssistantTests.csproj", "{1073EE82-9BD2-4AA9-993F-3500EBAEAE13}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -15,6 +17,10 @@ Global
 		{D191021F-2D9D-44FF-AEF4-4FE892EDF55A}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{D191021F-2D9D-44FF-AEF4-4FE892EDF55A}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{D191021F-2D9D-44FF-AEF4-4FE892EDF55A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{1073EE82-9BD2-4AA9-993F-3500EBAEAE13}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{1073EE82-9BD2-4AA9-993F-3500EBAEAE13}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{1073EE82-9BD2-4AA9-993F-3500EBAEAE13}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{1073EE82-9BD2-4AA9-993F-3500EBAEAE13}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
