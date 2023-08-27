@@ -122,16 +122,24 @@ namespace FireManAssist
                     injectorTarget = MinimumHandler(waterLevel, injectorTarget);
                     break;
             }
-            // if we have a target, and it's a new target, set the injector.
-            if (injectorTarget >= 0.0f && lastSetInjector != injectorTarget || (0.75f > boilerPressure.Value || 0.85f < boilerPressure.Value))
+            MaybeUpdateInjector(injectorTarget, waterLevel);
+        }
+
+        private void MaybeUpdateInjector(float injectorTarget, float waterLevel)
+        {
+            // We want to set injector in the following cases:
+            // 1) We have a change AND we're not in override mode OR Override rules are not set to Complete
+            // 2) We're below 75% water and the target is above 0,
+            // 3) we're above 85% water.
+            bool updateInjector = false;
+            updateInjector = updateInjector || FireManAssist.Settings.InjectorMode == InjectorOverrideMode.None;
+            updateInjector = updateInjector || (injectorTarget >= 0.0f && lastSetInjector != injectorTarget);
+            updateInjector = updateInjector || (0.75f > waterLevel && injectorTarget > 0.0f);
+            updateInjector = updateInjector || (0.85f < waterLevel);
+            if (updateInjector)
             {
                 injector.ExternalValueUpdate(injectorTarget);
                 lastSetInjector = injectorTarget;
-            }
-            // if override is disabled, force an update
-            if (FireManAssist.Settings.InjectorMode == InjectorOverrideMode.None)
-            {
-                injector.ExternalValueUpdate(lastSetInjector);
             }
         }
 
