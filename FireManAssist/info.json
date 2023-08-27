@@ -1,10 +1,10 @@
 ﻿{
   "Id": "FiremanAssistant",
   "Author": "lassombra",
-  "Version": "0.0.2",
+  "Version": "0.1.0",
   "AssemblyName": "FiremanAssistant.dll",
   "EntryMethod": "FireManAssist.FireManAssist.Load",
-  "DisplayName": "Water Protection",
+  "DisplayName": "Fireman Assistant",
   "ManagerVersion": "0.27.3",
   "HomePage": "https://www.nexusmods.com/derailvalley/mods/774",
   "Repository": "https://raw.githubusercontent.com/lassombra/FiremanAssist/main/repository.json"
