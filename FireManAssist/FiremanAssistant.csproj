@@ -85,7 +85,9 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="AbstractInfrequentUpdateComponent.cs" />
     <Compile Include="FireManAssist.cs" />
+    <Compile Include="FireMonitor.cs" />
     <Compile Include="LocoTracker.cs" />
     <Compile Include="PressureTracker.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />

@@ -91,6 +91,7 @@ namespace FireManAssist
         {
             FireManAssist.Logger.Log("Attaching WaterMonitor to " + loco.name);
             loco.gameObject.AddComponent<WaterMonitor>();
+            loco.gameObject.AddComponent<FireMonitor>();
             loco.OnDestroyCar += Loco_OnDestroyCar;
             monitoredCars.Add(loco);
             loco.TrainsetChanged += Car_TrainsetChanged;

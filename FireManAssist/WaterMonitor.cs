@@ -23,7 +23,7 @@ namespace FireManAssist
         Startup
     }
 
-    public class WaterMonitor : MonoBehaviour
+    public class WaterMonitor : AbstractInfrequentUpdateComponent
     {
         // The water level as handed to the sight glass
         private Port waterPort;
@@ -37,6 +37,9 @@ namespace FireManAssist
 
         // The boiler pressure port, used to monitor the boiler pressure and adjust the injector curves accordingly
         private Port boilerPressure;
+
+        // The angle of the water in the boiler, used to determine the true water level
+        private Port angleExtIn;
 
         // run counter and SKIP_TICKS are used to reduce CPU load by only running once SKIP_TICKS has elapsed
         private int runCounter = 0;
@@ -58,9 +61,9 @@ namespace FireManAssist
         private bool highPressure = false;
         private readonly PressureTracker pressureTracker = new PressureTracker();
 
-        //private BoilerDefinition boilerDefinition;
+        private float aspectRatio;
 
-        public void Start()
+        protected override void Init()
         {
             var trainCar = this.GetComponentInParent<TrainCar>();
             if (null == trainCar)
@@ -88,8 +91,11 @@ namespace FireManAssist
             simController.SimulationFlow.TryGetPort("injector.EXT_IN", out this.injector);
             simController.SimulationFlow.TryGetPort("blowdown.EXT_IN", out this.blowdown);
             simController.SimulationFlow.TryGetPort("boiler.PRESSURE", out this.boilerPressure);
+            simController.SimulationFlow.TryGetPort("boiler.BOILER_ANGLE_EXT_IN", out this.angleExtIn);
+            var boilerDefinition = trainCar.GetComponentInChildren<BoilerDefinition>();
+            aspectRatio = boilerDefinition.length / boilerDefinition.diameter;
         }
-        public void Update()
+        public override void Update()
         {
             if (lastSetInjector >= 0.0f && Math.Round(injector.Value, 1) != Math.Round(lastSetInjector, 1) && FireManAssist.Settings.InjectorMode == InjectorOverrideMode.Complete)
             {
@@ -97,19 +103,20 @@ namespace FireManAssist
                 running = false;
                 overrideTriggered = true;
             }
-            // skip most of the time, to reduce CPU load
-            if (runCounter < SKIP_TICKS || FireManAssist.Settings.WaterMode == WaterAssistMode.None)
+            if (FireManAssist.Settings.InjectorMode == InjectorOverrideMode.None && lastSetInjector >= 0.0f)
             {
-                runCounter++;
-                if (FireManAssist.Settings.InjectorMode == InjectorOverrideMode.None && lastSetInjector >= 0.0f)
-                {
-                    injector.ExternalValueUpdate(lastSetInjector);
-                }
-                return;
+                injector.ExternalValueUpdate(lastSetInjector);
             }
-            runCounter = 0;
+            base.Update();
+        }
+        protected override void InfrequentUpdate()
+        {
             float injectorTarget = -1.0f;
             float waterLevel = waterPort.Value;
+            float correction = this.aspectRatio / 2f * Mathf.Tan(-this.angleExtIn.Value * 3.1415927f / 180f);
+            // if correction is negative (water level in the sight glass is below actual water level in the boiler)
+            // then use the displayed water level, otherwise use the true water level.
+            waterLevel = Math.Min(waterLevel, waterLevel - correction);
             switch (FireManAssist.Settings.WaterMode)
             {
                 case WaterAssistMode.Full:
@@ -154,14 +161,14 @@ namespace FireManAssist
             switch (curve)
             {
                 case WaterCurve.LowPressure:
-                    return CalculateInjectorTarget(waterLevel, 4.0f, 0.8f, 0.81667f);
+                    return CalculateInjectorTarget(waterLevel, 4.0f, 0.77f, 0.81667f);
                 case WaterCurve.HighPressure:
                     return CalculateInjectorTarget(waterLevel, 1 / 3.0f, 0.8f, 0.85f);
                 case WaterCurve.Startup:
-                    return CalculateInjectorTarget(waterLevel, 4.0f, 0.75f, 0.77f);
+                    return CalculateInjectorTarget(waterLevel, 4.0f, 0.75f, 0.76f);
                 case WaterCurve.Default:
                 default:
-                    return CalculateInjectorTarget(waterLevel, 2.0f, 0.8f, 0.81667f);
+                    return CalculateInjectorTarget(waterLevel, 2.0f, 0.77f, 0.81667f);
             }
         }
 
