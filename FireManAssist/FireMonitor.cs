@@ -28,8 +28,13 @@ namespace FireManAssist
         private FireboxSimController fireController;
         // This is how keyboard coal add is simulated.  We use it to add coal to the firebox.
         private MagicShoveling shovelController;
+
+        private Port reverser;
+        private Port throttle;
+
         private Single lastSetDamper;
         private readonly PressureTracker pressureTracker = new PressureTracker();
+        private Single lastTarget = 0.0f;
 
         protected override void Init()
         {
@@ -53,7 +58,8 @@ namespace FireManAssist
             simController.SimulationFlow.TryGetPort("blower.EXT_IN", out this.blowerIn);
             simController.SimulationFlow.TryGetPort("boiler.PRESSURE", out this.boilerPressure);
             simController.SimulationFlow.TryGetPort("exhaust.AIR_FLOW", out this.airflow);
-
+            simController.SimulationFlow.TryGetPort("reverser.REVERSER", out this.reverser);
+            simController.SimulationFlow.TryGetPort("throttle.EXT_IN", out this.throttle);
             //Offset from water monitor since these get added in the same tick
             lastUpdate = 3;
         }
@@ -106,34 +112,51 @@ namespace FireManAssist
                     target = FireManAssist.CalculateIntervalFromCurve(pressure, 2.0f, 13.5f, 14.5f, 0.01f);
                     break;
                 default:
-                // Use a quad root curve based on current pressure - this will ramp down rapidly.
-                    target = FireManAssist.CalculateIntervalFromCurve(pressure, 4.0f, 13.5f, 14.5f, 0.01f);
+                // Use a cube root curve based on current pressure - this will ramp down rapidly.
+                    target = FireManAssist.CalculateIntervalFromCurve(pressure, 3.0f, 13.5f, 14.5f, 0.01f);
                     break;
             }
-            // Never more than 85% full, and never less than 5% full.
-            return Math.Min(Math.Max(target, 0.05f), 0.85f);
+            // Never more than 85% full, and never less than 0% full.
+            return Math.Min(Math.Max(target, 0.0f), 0.85f);
         }
-        protected override void InfrequentUpdate()
+        private Single normalize(Single value, Single min, Single max)
+        {
+            return Math.Max(0.0f, Math.Min(1.0f, (value - min) / (max - min)));
+        }
+        protected override void InfrequentUpdate(bool slowUpdateFrame)
         {
             var trend = pressureTracker.UpdateAndCheckTrend(Pressure);
             if (FireDoorOpen && FireOn)
             {
                 var target = FireboxTarget(trend, Pressure) * fireController.FireboxDoorOpening;
+                // if we aren't demanding much from the locomotive, we don't need to add much coal.
+                target = target * normalize(Math.Abs(throttle.Value), 0.01f, 0.85f) * normalize(Math.Abs(reverser.Value), 0.01f, 0.75f);
+                if (Pressure < 11.0f)
+                {
+                    // during startup / if we've run out of pressure, we have a *minimum* of 25% coal
+                    target = Math.Max(target, 0.25f);
+                }
+                // anytime we're trying to manage the fire, we need a minimum of 1% coal
+                target = Math.Max(target, 0.01f);
+                lastTarget = target;
                 Boolean shouldAddCoal = FireboxContentsNormalized <= target;
                 // need some pressure
-                shouldAddCoal = shouldAddCoal || (trend == Trend.Falling && Pressure <= 13.5f && FireboxContentsNormalized <= 0.5f);
+                // shouldAddCoal = shouldAddCoal || (trend == Trend.Falling && Pressure <= 13.5f && FireboxContentsNormalized <= 0.5f);
                 // can't keep up with demand
-                shouldAddCoal = shouldAddCoal || (trend != Trend.Rising && Pressure <= 13.0f && FireboxContentsNormalized <= 0.9f);
+                // shouldAddCoal = shouldAddCoal || (trend != Trend.Rising && Pressure <= 13.0f && FireboxContentsNormalized <= 0.9f);
                 if (shouldAddCoal)
                 {
                     shovelController.AddCoalToFirebox(1);
                 }
                 //keeps fire from getting too hot
-                lastSetDamper = FireManAssist.CalculateIntervalFromCurve(Pressure, 2.0f, 13.5f, 14.5f, 0.2f);
+                if (slowUpdateFrame)
+                {
+                    lastSetDamper = FireManAssist.CalculateIntervalFromCurve(Pressure, 2.0f, 13.5f, 14.5f, 0.2f);
+                }
                 if (Pressure <= 13.5f && AirFlow <= 1.5f)
                 {
                     blowerIn.ExternalValueUpdate(1.0f);
-                } else
+                } else if (Pressure >= 13f && AirFlow >= 2.0f)
                 {
                     blowerIn.ExternalValueUpdate(0.0f);
                 }

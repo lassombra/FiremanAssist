@@ -109,7 +109,7 @@ namespace FireManAssist
             }
             base.Update();
         }
-        protected override void InfrequentUpdate()
+        protected override void InfrequentUpdate(bool slowUpdateFrame)
         {
             float injectorTarget = -1.0f;
             float waterLevel = waterPort.Value;
@@ -129,18 +129,19 @@ namespace FireManAssist
                     injectorTarget = MinimumHandler(waterLevel, injectorTarget);
                     break;
             }
-            MaybeUpdateInjector(injectorTarget, waterLevel);
+            MaybeUpdateInjector(injectorTarget, waterLevel, slowUpdateFrame);
         }
 
-        private void MaybeUpdateInjector(float injectorTarget, float waterLevel)
+        private void MaybeUpdateInjector(float injectorTarget, float waterLevel, bool slowUpdateFrame)
         {
             // We want to set injector in the following cases:
-            // 1) We have a change AND we're not in override mode OR Override rules are not set to Complete
+            // 1) We have a change AND we're not in override mode OR Override rules are not set to Complete AND we're on a slowUpdateFrame
             // 2) We're below 75% water and the target is above 0,
             // 3) we're above 85% water.
             bool updateInjector = false;
             updateInjector = updateInjector || FireManAssist.Settings.InjectorMode == InjectorOverrideMode.None;
             updateInjector = updateInjector || (injectorTarget >= 0.0f && lastSetInjector != injectorTarget);
+            updateInjector = updateInjector && slowUpdateFrame;
             updateInjector = updateInjector || (0.75f > waterLevel && injectorTarget > 0.0f);
             updateInjector = updateInjector || (0.85f < waterLevel);
             if (updateInjector)
