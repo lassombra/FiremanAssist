@@ -9,6 +9,12 @@ using System.Threading.Tasks;
 
 namespace FireManAssist
 {
+    public enum State
+    {
+        Off,
+        ShuttingDown,
+        Running
+    }
     internal class FireMonitor : AbstractInfrequentUpdateComponent
     {
         // Control for damper
@@ -35,6 +41,34 @@ namespace FireManAssist
         private Single lastSetDamper;
         private readonly PressureTracker pressureTracker = new PressureTracker();
         private Single lastTarget = 0.0f;
+        private bool firing = false;
+        public State State { get
+            {
+                if (firing)
+                {
+                    return State.Running;
+                } else if (FireOn)
+                {
+                    return State.ShuttingDown;
+                } else
+                {
+                    return State.Off;
+                }
+            }
+        }
+
+        public void StartFiring()
+        {
+            firing = true;
+        }
+        public void StopFiring()
+        {
+            firing = false;
+        }
+        public void ToggleFiring()
+        {
+            firing = !firing;
+        }
 
         protected override void Init()
         {
@@ -75,13 +109,6 @@ namespace FireManAssist
             get
             {
                 return boilerPressure.Value;
-            }
-        }
-        public Boolean FireDoorOpen
-        {
-            get
-            {
-                return fireController.FireboxDoorOpening > 0.0f;
             }
         }
         public Boolean FireOn
@@ -126,7 +153,7 @@ namespace FireManAssist
         protected override void InfrequentUpdate(bool slowUpdateFrame)
         {
             var trend = pressureTracker.UpdateAndCheckTrend(Pressure);
-            if (FireDoorOpen && FireOn)
+            if (firing && FireOn)
             {
                 var target = FireboxTarget(trend, Pressure) * fireController.FireboxDoorOpening;
                 // if we aren't demanding much from the locomotive, we don't need to add much coal.
@@ -148,6 +175,8 @@ namespace FireManAssist
                 {
                     shovelController.AddCoalToFirebox(1);
                 }
+            }
+            if (FireOn) { 
                 //keeps fire from getting too hot
                 if (slowUpdateFrame)
                 {
@@ -160,12 +189,16 @@ namespace FireManAssist
                 {
                     blowerIn.ExternalValueUpdate(0.0f);
                 }
+            } else if (firing)
+            {
+                shovelController.AddCoalToFirebox(2);
+                fireController.Ignite();
             }
         }
         public override void Update()
         {
             base.Update();
-            if (FireDoorOpen && FireOn)
+            if (FireOn)
             {
                 damperIn.ExternalValueUpdate(lastSetDamper);
             }

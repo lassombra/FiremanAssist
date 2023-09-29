@@ -1,5 +1,7 @@
-﻿using DV.Logic.Job;
+﻿using CommsRadioAPI;
+using DV.Logic.Job;
 using DV.ThingTypes;
+using FireManAssist.Radio;
 using RootMotion;
 using System;
 using System.Collections.Generic;
@@ -13,10 +15,28 @@ namespace FireManAssist
     internal class LocoTracker
     {
         private readonly HashSet<TrainCar> monitoredCars = new HashSet<TrainCar>();
+        private CommsRadioMode commsRadioMode;
+        public LayerMask TrainCarMask { get; private set; }
+        public LayerMask TrainInteriorMask { get; private set; }
         private void Start()
         {
             FireManAssist.Logger.Log("Starting LocoTracker");
             PlayerManager.CarChanged += PlayerManager_CarChanged;
+            if (commsRadioMode == null)
+            {
+                commsRadioMode = CommsRadioMode.Create(new RadioToggleBehavior(), laserColor: new Color(0.8f, 0.333f, 0f));
+            } else
+            {
+                commsRadioMode.enabled = true;
+            }
+            this.TrainCarMask = LayerMask.GetMask(new string[]
+            {
+                "Train_Big_Collider"
+            });
+            this.TrainInteriorMask = LayerMask.GetMask(new string[]
+            {
+                "Train_Interior"
+            });
             PlayerManager_CarChanged(PlayerManager.Car);
         }
         private void Stop()
@@ -27,6 +47,7 @@ namespace FireManAssist
                 car.TrainsetChanged -= Car_TrainsetChanged;
             });
             PlayerManager.CarChanged -= PlayerManager_CarChanged;
+            commsRadioMode.enabled = false;
         }
 
         private void PlayerManager_CarChanged(TrainCar car)
@@ -62,7 +83,7 @@ namespace FireManAssist
                 });
         }
 
-        private bool MaybeAttachWaterMonitor(TrainCar loco)
+        public bool MaybeAttachWaterMonitor(TrainCar loco)
         {
             if (null != loco)
             {

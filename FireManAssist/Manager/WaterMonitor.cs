@@ -139,7 +139,7 @@ namespace FireManAssist
             // 2) We're below 75% water and the target is above 0,
             // 3) we're above 85% water.
             bool updateInjector = false;
-            updateInjector = updateInjector || FireManAssist.Settings.InjectorMode == InjectorOverrideMode.None;
+            updateInjector = updateInjector || (FireManAssist.Settings.InjectorMode == InjectorOverrideMode.None && injectorTarget >= 0.0f);
             updateInjector = updateInjector || (injectorTarget >= 0.0f && lastSetInjector != injectorTarget);
             updateInjector = updateInjector && slowUpdateFrame;
             updateInjector = updateInjector || (0.75f > waterLevel && injectorTarget > 0.0f);
@@ -251,7 +251,7 @@ namespace FireManAssist
             } else
             {
                 // we had a fire, now we don't, initially turn off the injector.  User can turn it back on (to prime for example) but otherwise we'll just fall through to OverUnderHandler
-                if (running)
+                if (running || FireManAssist.Settings.InjectorMode == InjectorOverrideMode.None)
                 {
                     running = false;
                     return 0.0f;
@@ -277,7 +277,7 @@ namespace FireManAssist
             if (waterLevel < 0.75f)
             {
                 blowdown.ExternalValueUpdate(0f);
-                if (firePort.Value == 1f)
+                if (firePort.Value == 1f || FireManAssist.Settings.InjectorMode == InjectorOverrideMode.None)
                 {
                     // override will only reset if the fire is on
                     overrideTriggered = false;
