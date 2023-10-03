@@ -42,6 +42,7 @@ namespace FireManAssist.Radio
                 case State.ShuttingDown:
                     return "Start Firing";
                 case State.Running:
+                case State.WaterOut:
                     return "Shut Down";
                 default:
                     return "";
@@ -65,6 +66,8 @@ namespace FireManAssist.Radio
                     return "Shutting down fire";
                 case State.Running:
                     return "Fire on";
+                case State.WaterOut:
+                    return "Out of Water";
                 default:
                     return "Unknown state";
             }

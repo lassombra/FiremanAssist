@@ -22,13 +22,6 @@ namespace FireManAssist
         {
             FireManAssist.Logger.Log("Starting LocoTracker");
             PlayerManager.CarChanged += PlayerManager_CarChanged;
-            if (commsRadioMode == null)
-            {
-                commsRadioMode = CommsRadioMode.Create(new RadioToggleBehavior(), laserColor: new Color(0.8f, 0.333f, 0f));
-            } else
-            {
-                commsRadioMode.enabled = true;
-            }
             this.TrainCarMask = LayerMask.GetMask(new string[]
             {
                 "Train_Big_Collider"
@@ -47,9 +40,7 @@ namespace FireManAssist
                 car.TrainsetChanged -= Car_TrainsetChanged;
             });
             PlayerManager.CarChanged -= PlayerManager_CarChanged;
-            commsRadioMode.enabled = false;
         }
-
         private void PlayerManager_CarChanged(TrainCar car)
         {
             bool attached = false;

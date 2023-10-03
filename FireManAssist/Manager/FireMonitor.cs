@@ -13,7 +13,8 @@ namespace FireManAssist
     {
         Off,
         ShuttingDown,
-        Running
+        Running,
+        WaterOut
     }
     internal class FireMonitor : AbstractInfrequentUpdateComponent
     {
@@ -28,6 +29,7 @@ namespace FireManAssist
 
         // The boiler pressure port, used to monitor the boiler pressure and adjust the damper curves accordingly
         private Port boilerPressure;
+        private WaterMonitor WaterMonitor;
 
         // this is the firebox itself - it's a useful object as it has a lot of the variables we need
         // and it's guaranteed to be present for the two locomotives we're supporting
@@ -42,11 +44,16 @@ namespace FireManAssist
         private readonly PressureTracker pressureTracker = new PressureTracker();
         private Single lastTarget = 0.0f;
         private bool firing = false;
+        private Port waterCapacity;
+        private float minReserve = 0.1f;
+
         public State State { get
             {
-                if (firing)
+                if (firing && SufficientReserve)
                 {
                     return State.Running;
+                } else if (firing) {
+                    return State.WaterOut;
                 } else if (FireOn)
                 {
                     return State.ShuttingDown;
@@ -55,19 +62,6 @@ namespace FireManAssist
                     return State.Off;
                 }
             }
-        }
-
-        public void StartFiring()
-        {
-            firing = true;
-        }
-        public void StopFiring()
-        {
-            firing = false;
-        }
-        public void ToggleFiring()
-        {
-            firing = !firing;
         }
 
         protected override void Init()
@@ -86,6 +80,8 @@ namespace FireManAssist
                 FireManAssist.Logger.Log("No SimController found");
                 return;
             }
+            WaterMonitor = trainCar.GetComponent<WaterMonitor>();
+            WaterMonitor.Firing = false;
             fireController = trainCar.GetComponent<SimController>().firebox;
             shovelController = trainCar.GetComponent<MagicShoveling>();
             simController.SimulationFlow.TryGetPort("damper.EXT_IN", out this.damperIn);
@@ -94,36 +90,25 @@ namespace FireManAssist
             simController.SimulationFlow.TryGetPort("exhaust.AIR_FLOW", out this.airflow);
             simController.SimulationFlow.TryGetPort("reverser.REVERSER", out this.reverser);
             simController.SimulationFlow.TryGetPort("throttle.EXT_IN", out this.throttle);
+            if (!simController.SimulationFlow.TryGetPort("tenderWater.NORMALIZED", out this.waterCapacity))
+            {
+                simController.SimulationFlow.TryGetPort("water.NORMALIZED", out this.waterCapacity);
+            }
             //Offset from water monitor since these get added in the same tick
             lastUpdate = 3;
         }
-        public Single AirFlow
+
+        public Single AirFlow => airflow.Value;
+        public Single Pressure => boilerPressure.Value;
+        public Boolean FireOn => fireController.IsFireOn;
+        public Single FireboxContentsNormalized => fireController.FireboxContents / fireController.FireboxCapacity;
+        public Single WaterReserve => this.waterCapacity.Value;
+        public bool SufficientReserve => this.waterCapacity.Value >= this.minReserve;
+
+        public void ToggleFiring()
         {
-            get
-            {
-                return airflow.Value;
-            }
-        }
-        public Single Pressure
-        {
-            get
-            {
-                return boilerPressure.Value;
-            }
-        }
-        public Boolean FireOn
-        {
-            get
-            {
-                return fireController.IsFireOn;
-            }
-        }
-        public Single FireboxContentsNormalized
-        {
-            get
-            {
-                return fireController.FireboxContents / fireController.FireboxCapacity;
-            }
+            firing = !firing;
+            WaterMonitor.Firing = firing;
         }
         private static Single FireboxTarget(Trend trend, Single pressure)
         {
@@ -136,7 +121,7 @@ namespace FireManAssist
                     break;
                 // it's falling - we might need to add a lot of coal, but we'll plan it based on the range of 14.5 to 13.5 (actually 13.5 to 12.5)
                 case Trend.Falling:
-                    target = FireManAssist.CalculateIntervalFromCurve(pressure, 2.0f, 13.5f, 14.5f, 0.01f);
+                    target = FireManAssist.CalculateIntervalFromCurve(pressure, 3.0f, 13.0f, 14.5f, 0.01f);
                     break;
                 default:
                 // Use a cube root curve based on current pressure - this will ramp down rapidly.
@@ -153,9 +138,9 @@ namespace FireManAssist
         protected override void InfrequentUpdate(bool slowUpdateFrame)
         {
             var trend = pressureTracker.UpdateAndCheckTrend(Pressure);
-            if (firing && FireOn)
+            if (firing && FireOn && SufficientReserve)
             {
-                var target = FireboxTarget(trend, Pressure) * fireController.FireboxDoorOpening;
+                var target = FireboxTarget(trend, Pressure);
                 // if we aren't demanding much from the locomotive, we don't need to add much coal.
                 target = target * normalize(Math.Abs(throttle.Value), 0.01f, 0.85f) * normalize(Math.Abs(reverser.Value), 0.01f, 0.75f);
                 if (Pressure < 11.0f)
@@ -180,16 +165,16 @@ namespace FireManAssist
                 //keeps fire from getting too hot
                 if (slowUpdateFrame)
                 {
-                    lastSetDamper = FireManAssist.CalculateIntervalFromCurve(Pressure, 2.0f, 13.5f, 14.5f, 0.2f);
+                    lastSetDamper = FireManAssist.CalculateIntervalFromCurve(Pressure, 0.5f, 14.0f, 14.5f, 0.2f);
                 }
-                if (Pressure <= 13.5f && AirFlow <= 1.5f)
+                if (Pressure <= 14.0f || AirFlow <= 1.5f)
                 {
                     blowerIn.ExternalValueUpdate(1.0f);
-                } else if (Pressure >= 13f && AirFlow >= 2.0f)
+                } else if ((Pressure >= 14.5f && AirFlow >= 2.0f) || AirFlow >= 3.0f)
                 {
                     blowerIn.ExternalValueUpdate(0.0f);
                 }
-            } else if (firing)
+            } else if (firing && SufficientReserve)
             {
                 shovelController.AddCoalToFirebox(2);
                 fireController.Ignite();

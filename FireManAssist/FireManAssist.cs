@@ -1,4 +1,6 @@
-﻿using HarmonyLib;
+﻿using CommsRadioAPI;
+using FireManAssist.Radio;
+using HarmonyLib;
 using Obi;
 using System;
 using System.Collections.Generic;
@@ -16,14 +18,21 @@ namespace FireManAssist
     {
         internal static ModLogger Logger { get; private set; }
         internal static Settings Settings { get; private set; }
+        internal static CommsRadioMode CommsRadioMode { get; private set; }
         static bool Load(UnityModManager.ModEntry modEntry)
         {
             modEntry.OnToggle = OnToggle;
             Settings = Settings.Load<Settings>(modEntry);
             modEntry.OnGUI = OnGUI;
             modEntry.OnSaveGUI = OnSaveGUI;
+            ControllerAPI.Ready += InitCommRadio;
             return true;
         }
+        internal static void InitCommRadio()
+        {
+            CommsRadioMode = CommsRadioMode.Create(new RadioToggleBehavior(), laserColor: new Color(0.8f, 0.333f, 0f));
+        }
+
 
         public static void OnGUI(UnityModManager.ModEntry modEntry)
         {
