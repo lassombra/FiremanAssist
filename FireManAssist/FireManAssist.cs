@@ -1,6 +1,11 @@
-﻿using System;
+﻿using CommsRadioAPI;
+using FireManAssist.Radio;
+using HarmonyLib;
+using Obi;
+using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 using UnityEngine;
@@ -9,19 +14,25 @@ using static UnityModManagerNet.UnityModManager.ModEntry;
 
 namespace FireManAssist
 {
-    [EnableReloading]
     public class FireManAssist
     {
         internal static ModLogger Logger { get; private set; }
         internal static Settings Settings { get; private set; }
+        internal static CommsRadioMode CommsRadioMode { get; private set; }
         static bool Load(UnityModManager.ModEntry modEntry)
         {
             modEntry.OnToggle = OnToggle;
             Settings = Settings.Load<Settings>(modEntry);
             modEntry.OnGUI = OnGUI;
             modEntry.OnSaveGUI = OnSaveGUI;
+            ControllerAPI.Ready += InitCommRadio;
             return true;
         }
+        internal static void InitCommRadio()
+        {
+            CommsRadioMode = CommsRadioMode.Create(new RadioToggleBehavior(), laserColor: new Color(0.8f, 0.333f, 0f));
+        }
+
 
         public static void OnGUI(UnityModManager.ModEntry modEntry)
         {
@@ -39,6 +50,8 @@ namespace FireManAssist
                 Logger = modEntry.Logger;
                 WorldStreamingInit.LoadingFinished += Start;
                 UnloadWatcher.UnloadRequested += Stop;
+                var harmony = new Harmony(modEntry.Info.Id);
+                harmony.PatchAll(Assembly.GetExecutingAssembly());
                 if (WorldStreamingInit.Instance && WorldStreamingInit.IsLoaded)
                 {
                     Start();
@@ -55,6 +68,7 @@ namespace FireManAssist
         static void Start()
         {
             Logger.Log("Starting FireManAssist");
+
             LocoTracker.Create();
         }
         static void Stop()

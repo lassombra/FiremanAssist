@@ -1,11 +1,12 @@
 ﻿{
   "Id": "FiremanAssistant",
   "Author": "lassombra",
-  "Version": "0.1.1-alpha.2",
+  "Version": "0.1.1-alpha.4",
   "AssemblyName": "FiremanAssistant.dll",
   "EntryMethod": "FireManAssist.FireManAssist.Load",
   "DisplayName": "Fireman Assistant",
   "ManagerVersion": "0.27.3",
+  "requirements": [ "CommsRadioAPI" ],
   "HomePage": "https://www.nexusmods.com/derailvalley/mods/774",
   "Repository": "https://raw.githubusercontent.com/lassombra/FiremanAssist/main/repository.json"
 }

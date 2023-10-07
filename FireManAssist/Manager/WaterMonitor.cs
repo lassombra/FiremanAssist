@@ -41,9 +41,13 @@ namespace FireManAssist
         // The angle of the water in the boiler, used to determine the true water level
         private Port angleExtIn;
 
-        // run counter and SKIP_TICKS are used to reduce CPU load by only running once SKIP_TICKS has elapsed
-        private int runCounter = 0;
-        private static readonly int SKIP_TICKS = 5;
+        // The amount of water in the cylinders
+        private Port cylinderWater;
+
+
+        //Control to open / close the cylinder cocks
+        private Port cylinderCocks;
+
 
         // Whether or not the "full" mode is actively running
         // provided mod settings allow "full" mode, this will be true
@@ -59,9 +63,12 @@ namespace FireManAssist
         // Whether or not we've gone into low pressure mode.  This mode is triggered by a dropping pressure trend while under 13bar and will not be exited until the pressure is above 13bar
         private bool lowPressure = false;
         private bool highPressure = false;
+        public bool Firing { private get; set; }
         private readonly PressureTracker pressureTracker = new PressureTracker();
 
         private float aspectRatio;
+
+        public Single WaterLevel => waterPort.Value;
 
         protected override void Init()
         {
@@ -92,6 +99,8 @@ namespace FireManAssist
             simController.SimulationFlow.TryGetPort("blowdown.EXT_IN", out this.blowdown);
             simController.SimulationFlow.TryGetPort("boiler.PRESSURE", out this.boilerPressure);
             simController.SimulationFlow.TryGetPort("boiler.BOILER_ANGLE_EXT_IN", out this.angleExtIn);
+            simController.SimulationFlow.TryGetPort("steamEngine.WATER_IN_CYLINDERS_NORMALIZED", out this.cylinderWater);
+            simController.SimulationFlow.TryGetPort("cylinderCock.EXT_IN", out this.cylinderCocks);
             var boilerDefinition = trainCar.GetComponentInChildren<BoilerDefinition>();
             aspectRatio = boilerDefinition.length / boilerDefinition.diameter;
         }
@@ -130,6 +139,22 @@ namespace FireManAssist
                     break;
             }
             MaybeUpdateInjector(injectorTarget, waterLevel, slowUpdateFrame);
+            if (slowUpdateFrame)
+            {
+                UpdateCylinderCocks();
+            }
+        }
+
+        private void UpdateCylinderCocks()
+        {
+            if (cylinderWater.Value >= 0.01f)
+            {
+                cylinderCocks.ExternalValueUpdate(1.0f);
+            }
+            else if (cylinderWater.Value <= 0.0f)
+            {
+                cylinderCocks.ExternalValueUpdate(0.0f);
+            }
         }
 
         private void MaybeUpdateInjector(float injectorTarget, float waterLevel, bool slowUpdateFrame)
@@ -139,7 +164,7 @@ namespace FireManAssist
             // 2) We're below 75% water and the target is above 0,
             // 3) we're above 85% water.
             bool updateInjector = false;
-            updateInjector = updateInjector || FireManAssist.Settings.InjectorMode == InjectorOverrideMode.None;
+            updateInjector = updateInjector || (FireManAssist.Settings.InjectorMode == InjectorOverrideMode.None && injectorTarget >= 0.0f);
             updateInjector = updateInjector || (injectorTarget >= 0.0f && lastSetInjector != injectorTarget);
             updateInjector = updateInjector && slowUpdateFrame;
             updateInjector = updateInjector || (0.75f > waterLevel && injectorTarget > 0.0f);
@@ -251,7 +276,7 @@ namespace FireManAssist
             } else
             {
                 // we had a fire, now we don't, initially turn off the injector.  User can turn it back on (to prime for example) but otherwise we'll just fall through to OverUnderHandler
-                if (running)
+                if (running || FireManAssist.Settings.InjectorMode == InjectorOverrideMode.None)
                 {
                     running = false;
                     return 0.0f;
@@ -277,9 +302,9 @@ namespace FireManAssist
             if (waterLevel < 0.75f)
             {
                 blowdown.ExternalValueUpdate(0f);
-                if (firePort.Value == 1f)
+                if (firePort.Value == 1f || Firing)
                 {
-                    // override will only reset if the fire is on
+                    // override will only reset if the fire is on or the fireman is trying to start it
                     overrideTriggered = false;
                     return 1.0f;
                 }

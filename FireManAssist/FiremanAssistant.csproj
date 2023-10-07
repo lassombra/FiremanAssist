@@ -43,6 +43,10 @@
       <HintPath>..\..\..\..\..\..\Program Files (x86)\Steam\steamapps\common\Derail Valley\DerailValley_Data\Managed\Assembly-CSharp-firstpass.dll</HintPath>
       <Private>False</Private>
     </Reference>
+    <Reference Include="CommsRadioAPI">
+      <HintPath>..\..\..\..\..\..\Program Files (x86)\Steam\steamapps\common\Derail Valley\Mods\CommsRadioAPI\CommsRadioAPI.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
     <Reference Include="DV.Simulation">
       <HintPath>..\..\..\..\..\..\Program Files (x86)\Steam\steamapps\common\Derail Valley\DerailValley_Data\Managed\DV.Simulation.dll</HintPath>
       <Private>False</Private>
@@ -75,6 +79,10 @@
       <HintPath>..\..\..\..\..\..\Program Files (x86)\Steam\steamapps\common\Derail Valley\DerailValley_Data\Managed\UnityEngine.IMGUIModule.dll</HintPath>
       <Private>False</Private>
     </Reference>
+    <Reference Include="UnityEngine.PhysicsModule">
+      <HintPath>..\..\..\..\..\..\Program Files (x86)\Steam\steamapps\common\Derail Valley\DerailValley_Data\Managed\UnityEngine.PhysicsModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
     <Reference Include="UnityEngine.UI">
       <HintPath>..\..\..\..\..\..\Program Files (x86)\Steam\steamapps\common\Derail Valley\DerailValley_Data\Managed\UnityEngine.UI.dll</HintPath>
       <Private>False</Private>
@@ -87,12 +95,14 @@
   <ItemGroup>
     <Compile Include="AbstractInfrequentUpdateComponent.cs" />
     <Compile Include="FireManAssist.cs" />
-    <Compile Include="FireMonitor.cs" />
-    <Compile Include="LocoTracker.cs" />
-    <Compile Include="PressureTracker.cs" />
+    <Compile Include="Manager\FireMonitor.cs" />
+    <Compile Include="Manager\LocoTracker.cs" />
+    <Compile Include="Manager\PressureTracker.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="Radio\HighLighter.cs" />
+    <Compile Include="Radio\RadioToggleBehavior.cs" />
     <Compile Include="Settings.cs" />
-    <Compile Include="WaterMonitor.cs" />
+    <Compile Include="Manager\WaterMonitor.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="info.json">
