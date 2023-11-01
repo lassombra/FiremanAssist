@@ -113,20 +113,27 @@ namespace FireManAssist
         private static Single FireboxTarget(Trend trend, Single pressure)
         {
             var target = 0.0f;
-            switch (trend)
+            if (FireManAssist.Settings.FireMode == FireAssistMode.Full)
             {
-                // minimum coal - it's rising, don't do much
-                case Trend.Rising:
-                    target = 0.05f;
-                    break;
-                // it's falling - we might need to add a lot of coal, but we'll plan it based on the range of 14.5 to 13.5 (actually 13.5 to 12.5)
-                case Trend.Falling:
-                    target = FireManAssist.CalculateIntervalFromCurve(pressure, 3.0f, 13.0f, 14.5f, 0.01f);
-                    break;
-                default:
-                // Use a cube root curve based on current pressure - this will ramp down rapidly.
-                    target = FireManAssist.CalculateIntervalFromCurve(pressure, 3.0f, 13.5f, 14.5f, 0.01f);
-                    break;
+                switch (trend)
+                {
+                    // minimum coal - it's rising, don't do much
+                    case Trend.Rising:
+                        target = 0.05f;
+                        break;
+                    // it's falling - we might need to add a lot of coal, but we'll plan it based on the range of 14.5 to 13.5 (actually 13.5 to 12.5)
+                    case Trend.Falling:
+                        target = FireManAssist.CalculateIntervalFromCurve(pressure, 3.0f, 13.0f, 14.5f, 0.01f);
+                        break;
+                    default:
+                        // Use a cube root curve based on current pressure - this will ramp down rapidly.
+                        target = FireManAssist.CalculateIntervalFromCurve(pressure, 3.0f, 13.5f, 14.5f, 0.01f);
+                        break;
+                }
+            }
+            else if (FireManAssist.Settings.FireMode == FireAssistMode.KeepBurning)
+            {
+                target = 0.05f;
             }
             // Never more than 85% full, and never less than 0% full.
             return Math.Min(Math.Max(target, 0.0f), 0.85f);
@@ -138,12 +145,12 @@ namespace FireManAssist
         protected override void InfrequentUpdate(bool slowUpdateFrame)
         {
             var trend = pressureTracker.UpdateAndCheckTrend(Pressure);
-            if (firing && FireOn && SufficientReserve)
+            if (firing && FireOn && SufficientReserve && FireManAssist.Settings.FireMode != FireAssistMode.None)
             {
                 var target = FireboxTarget(trend, Pressure);
                 // if we aren't demanding much from the locomotive, we don't need to add much coal.
                 target = target * normalize(Math.Abs(throttle.Value), 0.01f, 0.85f) * normalize(Math.Abs(reverser.Value), 0.01f, 0.75f);
-                if (Pressure < 11.0f)
+                if (Pressure < 11.0f && FireManAssist.Settings.FireMode == FireAssistMode.Full)
                 {
                     // during startup / if we've run out of pressure, we have a *minimum* of 25% coal
                     target = Math.Max(target, 0.25f);
@@ -161,7 +168,21 @@ namespace FireManAssist
                     shovelController.AddCoalToFirebox(1);
                 }
             }
-            if (FireOn) { 
+            if (FireOn)
+            {
+                UpdateDamperAndBlower(slowUpdateFrame);
+            }
+            else if (firing && SufficientReserve && FireManAssist.Settings.FireMode == FireAssistMode.Full)
+            {
+                shovelController.AddCoalToFirebox(2);
+                fireController.Ignite();
+            }
+        }
+
+        private void UpdateDamperAndBlower(bool slowUpdateFrame)
+        {
+            if (FireManAssist.Settings.FiremanManagesBlowerAndDamper)
+            {
                 //keeps fire from getting too hot
                 if (slowUpdateFrame)
                 {
@@ -170,20 +191,17 @@ namespace FireManAssist
                 if (Pressure <= 14.0f || AirFlow <= 1.5f)
                 {
                     blowerIn.ExternalValueUpdate(1.0f);
-                } else if ((Pressure >= 14.5f && AirFlow >= 2.0f) || AirFlow >= 3.0f)
+                }
+                else if ((Pressure >= 14.5f && AirFlow >= 2.0f) || AirFlow >= 3.0f)
                 {
                     blowerIn.ExternalValueUpdate(0.0f);
                 }
-            } else if (firing && SufficientReserve)
-            {
-                shovelController.AddCoalToFirebox(2);
-                fireController.Ignite();
             }
         }
         public override void Update()
         {
             base.Update();
-            if (FireOn)
+            if (FireOn && FireManAssist.Settings.FiremanManagesBlowerAndDamper)
             {
                 damperIn.ExternalValueUpdate(lastSetDamper);
             }
