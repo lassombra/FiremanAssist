@@ -147,11 +147,11 @@ namespace FireManAssist
 
         private void UpdateCylinderCocks()
         {
-            if (cylinderWater.Value >= 0.01f)
+            if (cylinderWater.Value >= 0.01f && FireManAssist.Settings.AutoCylinderCocks)
             {
                 cylinderCocks.ExternalValueUpdate(1.0f);
             }
-            else if (cylinderWater.Value <= 0.0f)
+            else if (cylinderWater.Value <= 0.0f && FireManAssist.Settings.AutoCylinderCocks)
             {
                 cylinderCocks.ExternalValueUpdate(0.0f);
             }

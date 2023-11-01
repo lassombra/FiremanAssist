@@ -20,10 +20,19 @@ namespace FireManAssist
         Temporary,
         Complete
     }
+    public enum FireAssistMode
+    {
+        None,
+        KeepBurning,
+        Full
+    }
     public class Settings : UnityModManager.ModSettings, IDrawable
     {
         [Draw(DrawType.ToggleGroup)] public WaterAssistMode WaterMode = WaterAssistMode.Full;
         [Draw(DrawType.ToggleGroup, Label = "Injector override Mode")] public InjectorOverrideMode InjectorMode = InjectorOverrideMode.Temporary;
+        [Draw(DrawType.Toggle, Label ="Enable Auto Cylinder Cocks")] public bool AutoCylinderCocks = false;
+        [Draw(DrawType.ToggleGroup, Label= "Fire Assist Mode")] public FireAssistMode FireMode = FireAssistMode.Full;
+        [Draw(DrawType.Toggle, Label = "Fireman manages blower and damper")] public bool FiremanManagesBlowerAndDamper = true;
 
         public void OnChange()
         { }
