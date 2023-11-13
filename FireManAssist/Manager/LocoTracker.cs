@@ -1,13 +1,8 @@
 ﻿using CommsRadioAPI;
-using DV.Logic.Job;
 using DV.ThingTypes;
-using FireManAssist.Radio;
-using RootMotion;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using UnityEngine;
 
 namespace FireManAssist
@@ -15,7 +10,6 @@ namespace FireManAssist
     internal class LocoTracker
     {
         private readonly HashSet<TrainCar> monitoredCars = new HashSet<TrainCar>();
-        private CommsRadioMode commsRadioMode;
         public LayerMask TrainCarMask { get; private set; }
         public LayerMask TrainInteriorMask { get; private set; }
         private void Start()
@@ -141,6 +135,4 @@ namespace FireManAssist
             }
         }
     }
-    // S282 - 75% to 85%
-
 }

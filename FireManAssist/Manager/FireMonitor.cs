@@ -172,7 +172,7 @@ namespace FireManAssist
             {
                 UpdateDamperAndBlower(slowUpdateFrame);
             }
-            else if (firing && SufficientReserve && FireManAssist.Settings.FireMode == FireAssistMode.Full)
+            else if (firing && SufficientReserve && FireManAssist.Settings.FireMode == FireAssistMode.Full && WaterMonitor.WaterLevel >= 0.75f)
             {
                 shovelController.AddCoalToFirebox(2);
                 fireController.Ignite();
@@ -181,21 +181,18 @@ namespace FireManAssist
 
         private void UpdateDamperAndBlower(bool slowUpdateFrame)
         {
-            if (FireManAssist.Settings.FiremanManagesBlowerAndDamper)
+            if (FireManAssist.Settings.FiremanManagesBlowerAndDamper && slowUpdateFrame)
             {
-                //keeps fire from getting too hot
-                if (slowUpdateFrame)
-                {
-                    lastSetDamper = FireManAssist.CalculateIntervalFromCurve(Pressure, 0.5f, 14.0f, 14.5f, 0.2f);
-                }
-                if (Pressure <= 14.0f || AirFlow <= 1.5f)
+                lastSetDamper = FireManAssist.CalculateIntervalFromCurve(Pressure, 0.5f, 14.0f, 14.5f, 0.2f);
+                if ((Pressure <= 11.0f || AirFlow <= 1.5f) && lastSetDamper >= 0.99f)
                 {
                     blowerIn.ExternalValueUpdate(1.0f);
                 }
-                else if ((Pressure >= 14.5f && AirFlow >= 2.0f) || AirFlow >= 3.0f)
+                else if ((Pressure >= 14.5f && AirFlow >= 2.0f) || AirFlow >= 3.0f || lastSetDamper <0.99f)
                 {
                     blowerIn.ExternalValueUpdate(0.0f);
                 }
+
             }
         }
         public override void Update()
