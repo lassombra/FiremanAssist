@@ -3,10 +3,6 @@ using DV.Simulation.Cars;
 using LocoSim.Definitions;
 using LocoSim.Implementations;
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using UnityEngine;
 
 namespace FireManAssist
@@ -43,7 +39,8 @@ namespace FireManAssist
 
         // The amount of water in the cylinders
         private Port cylinderWater;
-
+        private Port cylinderTemperature;
+        private Port throttle;
 
         //Control to open / close the cylinder cocks
         private Port cylinderCocks;
@@ -69,6 +66,8 @@ namespace FireManAssist
         private float aspectRatio;
 
         public Single WaterLevel => waterPort.Value;
+
+        public bool CylindersCondensing => (throttle.Value > 0.0f && cylinderTemperature.Value < 50f) || (throttle.Value == 0.0f && cylinderTemperature.Value < 100f);
 
         protected override void Init()
         {
@@ -100,7 +99,9 @@ namespace FireManAssist
             simController.SimulationFlow.TryGetPort("boiler.PRESSURE", out this.boilerPressure);
             simController.SimulationFlow.TryGetPort("boiler.BOILER_ANGLE_EXT_IN", out this.angleExtIn);
             simController.SimulationFlow.TryGetPort("steamEngine.WATER_IN_CYLINDERS_NORMALIZED", out this.cylinderWater);
+            simController.SimulationFlow.TryGetPort("steamEngine.CYLINDER_TEMPERATURE", out this.cylinderTemperature);
             simController.SimulationFlow.TryGetPort("cylinderCock.EXT_IN", out this.cylinderCocks);
+            simController.SimulationFlow.TryGetPort("throttle.EXT_IN", out this.throttle);
             var boilerDefinition = trainCar.GetComponentInChildren<BoilerDefinition>();
             aspectRatio = boilerDefinition.length / boilerDefinition.diameter;
         }
@@ -139,7 +140,7 @@ namespace FireManAssist
                     break;
             }
             MaybeUpdateInjector(injectorTarget, waterLevel, slowUpdateFrame);
-            if (slowUpdateFrame)
+            if (slowUpdateFrame && FireManAssist.Settings.AutoCylinderCocks)
             {
                 UpdateCylinderCocks();
             }
@@ -147,11 +148,11 @@ namespace FireManAssist
 
         private void UpdateCylinderCocks()
         {
-            if (cylinderWater.Value >= 0.01f && FireManAssist.Settings.AutoCylinderCocks)
+            if (cylinderWater.Value >= 0.001f)
             {
                 cylinderCocks.ExternalValueUpdate(1.0f);
             }
-            else if (cylinderWater.Value <= 0.0f && FireManAssist.Settings.AutoCylinderCocks)
+            else if (cylinderWater.Value <= 0.0f && !CylindersCondensing)
             {
                 cylinderCocks.ExternalValueUpdate(0.0f);
             }
