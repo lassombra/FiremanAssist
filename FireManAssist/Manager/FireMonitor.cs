@@ -42,10 +42,9 @@ namespace FireManAssist
 
         private Single lastSetDamper;
         private readonly PressureTracker pressureTracker = new PressureTracker();
-        private Single lastTarget = 0.0f;
         private bool firing = false;
         private Port waterCapacity;
-        private float minReserve = 0.1f;
+        private readonly float minReserve = 0.1f;
 
         public State State { get
             {
@@ -138,7 +137,7 @@ namespace FireManAssist
             // Never more than 85% full, and never less than 0% full.
             return Math.Min(Math.Max(target, 0.0f), 0.85f);
         }
-        private Single normalize(Single value, Single min, Single max)
+        private Single Normalize(Single value, Single min, Single max)
         {
             return Math.Max(0.0f, Math.Min(1.0f, (value - min) / (max - min)));
         }
@@ -149,7 +148,7 @@ namespace FireManAssist
             {
                 var target = FireboxTarget(trend, Pressure);
                 // if we aren't demanding much from the locomotive, we don't need to add much coal.
-                target = target * normalize(Math.Abs(throttle.Value), 0.01f, 0.85f) * normalize(Math.Abs(reverser.Value), 0.01f, 0.75f);
+                target = target * Normalize(Math.Abs(throttle.Value), 0.01f, 0.85f) * Normalize(Math.Abs(reverser.Value), 0.01f, 0.75f);
                 if (Pressure < 11.0f && FireManAssist.Settings.FireMode == FireAssistMode.Full)
                 {
                     // during startup / if we've run out of pressure, we have a *minimum* of 25% coal
@@ -157,7 +156,6 @@ namespace FireManAssist
                 }
                 // anytime we're trying to manage the fire, we need a minimum of 1% coal
                 target = Math.Max(target, 0.01f);
-                lastTarget = target;
                 Boolean shouldAddCoal = FireboxContentsNormalized <= target;
                 // need some pressure
                 // shouldAddCoal = shouldAddCoal || (trend == Trend.Falling && Pressure <= 13.5f && FireboxContentsNormalized <= 0.5f);
