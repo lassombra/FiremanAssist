@@ -3,10 +3,6 @@ using DV.Simulation.Cars;
 using LocoSim.Definitions;
 using LocoSim.Implementations;
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using UnityEngine;
 
 namespace FireManAssist
@@ -23,7 +19,7 @@ namespace FireManAssist
         Startup
     }
 
-    public class WaterMonitor : MonoBehaviour
+    public class WaterMonitor : AbstractInfrequentUpdateComponent
     {
         // The water level as handed to the sight glass
         private Port waterPort;
@@ -38,9 +34,17 @@ namespace FireManAssist
         // The boiler pressure port, used to monitor the boiler pressure and adjust the injector curves accordingly
         private Port boilerPressure;
 
-        // run counter and SKIP_TICKS are used to reduce CPU load by only running once SKIP_TICKS has elapsed
-        private int runCounter = 0;
-        private static readonly int SKIP_TICKS = 5;
+        // The angle of the water in the boiler, used to determine the true water level
+        private Port angleExtIn;
+
+        // The amount of water in the cylinders
+        private Port cylinderWater;
+        private Port cylinderTemperature;
+        private Port throttle;
+
+        //Control to open / close the cylinder cocks
+        private Port cylinderCocks;
+
 
         // Whether or not the "full" mode is actively running
         // provided mod settings allow "full" mode, this will be true
@@ -56,11 +60,14 @@ namespace FireManAssist
         // Whether or not we've gone into low pressure mode.  This mode is triggered by a dropping pressure trend while under 13bar and will not be exited until the pressure is above 13bar
         private bool lowPressure = false;
         private bool highPressure = false;
+        public bool Firing { private get; set; }
         private readonly PressureTracker pressureTracker = new PressureTracker();
 
-        //private BoilerDefinition boilerDefinition;
+        private float aspectRatio;
 
-        public void Start()
+        public Single WaterLevel => waterPort.Value;
+
+        protected override void Init()
         {
             var trainCar = this.GetComponentInParent<TrainCar>();
             if (null == trainCar)
@@ -88,8 +95,15 @@ namespace FireManAssist
             simController.SimulationFlow.TryGetPort("injector.EXT_IN", out this.injector);
             simController.SimulationFlow.TryGetPort("blowdown.EXT_IN", out this.blowdown);
             simController.SimulationFlow.TryGetPort("boiler.PRESSURE", out this.boilerPressure);
+            simController.SimulationFlow.TryGetPort("boiler.BOILER_ANGLE_EXT_IN", out this.angleExtIn);
+            simController.SimulationFlow.TryGetPort("steamEngine.WATER_IN_CYLINDERS_NORMALIZED", out this.cylinderWater);
+            simController.SimulationFlow.TryGetPort("steamEngine.CYLINDER_TEMPERATURE", out this.cylinderTemperature);
+            simController.SimulationFlow.TryGetPort("cylinderCock.EXT_IN", out this.cylinderCocks);
+            simController.SimulationFlow.TryGetPort("throttle.EXT_IN", out this.throttle);
+            var boilerDefinition = trainCar.GetComponentInChildren<BoilerDefinition>();
+            aspectRatio = boilerDefinition.length / boilerDefinition.diameter;
         }
-        public void Update()
+        public override void Update()
         {
             if (lastSetInjector >= 0.0f && Math.Round(injector.Value, 1) != Math.Round(lastSetInjector, 1) && FireManAssist.Settings.InjectorMode == InjectorOverrideMode.Complete)
             {
@@ -97,19 +111,21 @@ namespace FireManAssist
                 running = false;
                 overrideTriggered = true;
             }
-            // skip most of the time, to reduce CPU load
-            if (runCounter < SKIP_TICKS || FireManAssist.Settings.WaterMode == WaterAssistMode.None)
+            if (FireManAssist.Settings.InjectorMode == InjectorOverrideMode.None && lastSetInjector >= 0.0f &&
+                (firePort.Value > 0.0f || Firing))
             {
-                runCounter++;
-                if (FireManAssist.Settings.InjectorMode == InjectorOverrideMode.None && lastSetInjector >= 0.0f)
-                {
-                    injector.ExternalValueUpdate(lastSetInjector);
-                }
-                return;
+                injector.ExternalValueUpdate(lastSetInjector);
             }
-            runCounter = 0;
+            base.Update();
+        }
+        protected override void InfrequentUpdate(bool slowUpdateFrame)
+        {
             float injectorTarget = -1.0f;
             float waterLevel = waterPort.Value;
+            float correction = this.aspectRatio / 2f * Mathf.Tan(-this.angleExtIn.Value * 3.1415927f / 180f);
+            // if correction is negative (water level in the sight glass is below actual water level in the boiler)
+            // then use the displayed water level, otherwise use the true water level.
+            waterLevel = Math.Min(waterLevel, waterLevel - correction);
             switch (FireManAssist.Settings.WaterMode)
             {
                 case WaterAssistMode.Full:
@@ -122,20 +138,38 @@ namespace FireManAssist
                     injectorTarget = MinimumHandler(waterLevel, injectorTarget);
                     break;
             }
-            MaybeUpdateInjector(injectorTarget, waterLevel);
+            MaybeUpdateInjector(injectorTarget, waterLevel, slowUpdateFrame);
+            if (slowUpdateFrame && FireManAssist.Settings.AutoCylinderCocks)
+            {
+                UpdateCylinderCocks();
+            }
         }
 
-        private void MaybeUpdateInjector(float injectorTarget, float waterLevel)
+        private void UpdateCylinderCocks()
+        {
+            if (cylinderWater.Value > 0f)
+            {
+                cylinderCocks.ExternalValueUpdate(1.0f);
+            }
+            else
+            {
+                cylinderCocks.ExternalValueUpdate(0.0f);
+            }
+        }
+
+        private void MaybeUpdateInjector(float injectorTarget, float waterLevel, bool slowUpdateFrame)
         {
             // We want to set injector in the following cases:
-            // 1) We have a change AND we're not in override mode OR Override rules are not set to Complete
+            // 1) We have a change AND we're not in override mode OR Override rules are not set to Complete AND we're on a slowUpdateFrame
             // 2) We're below 75% water and the target is above 0,
             // 3) we're above 85% water.
             bool updateInjector = false;
-            updateInjector = updateInjector || FireManAssist.Settings.InjectorMode == InjectorOverrideMode.None;
+            updateInjector = updateInjector || (FireManAssist.Settings.InjectorMode == InjectorOverrideMode.None && injectorTarget >= 0.0f);
             updateInjector = updateInjector || (injectorTarget >= 0.0f && lastSetInjector != injectorTarget);
+            updateInjector = updateInjector && slowUpdateFrame;
             updateInjector = updateInjector || (0.75f > waterLevel && injectorTarget > 0.0f);
             updateInjector = updateInjector || (0.85f < waterLevel);
+            updateInjector = updateInjector && (firePort.Value > 0.0f || Firing || waterLevel >= 0.75f);
             if (updateInjector)
             {
                 injector.ExternalValueUpdate(injectorTarget);
@@ -154,14 +188,14 @@ namespace FireManAssist
             switch (curve)
             {
                 case WaterCurve.LowPressure:
-                    return CalculateInjectorTarget(waterLevel, 4.0f, 0.8f, 0.81667f);
+                    return CalculateInjectorTarget(waterLevel, 4.0f, 0.77f, 0.81667f);
                 case WaterCurve.HighPressure:
                     return CalculateInjectorTarget(waterLevel, 1 / 3.0f, 0.8f, 0.85f);
                 case WaterCurve.Startup:
-                    return CalculateInjectorTarget(waterLevel, 4.0f, 0.75f, 0.77f);
+                    return CalculateInjectorTarget(waterLevel, 4.0f, 0.75f, 0.76f);
                 case WaterCurve.Default:
                 default:
-                    return CalculateInjectorTarget(waterLevel, 2.0f, 0.8f, 0.81667f);
+                    return CalculateInjectorTarget(waterLevel, 2.0f, 0.77f, 0.81667f);
             }
         }
 
@@ -243,7 +277,7 @@ namespace FireManAssist
             } else
             {
                 // we had a fire, now we don't, initially turn off the injector.  User can turn it back on (to prime for example) but otherwise we'll just fall through to OverUnderHandler
-                if (running)
+                if (running || FireManAssist.Settings.InjectorMode == InjectorOverrideMode.None)
                 {
                     running = false;
                     return 0.0f;
@@ -269,9 +303,9 @@ namespace FireManAssist
             if (waterLevel < 0.75f)
             {
                 blowdown.ExternalValueUpdate(0f);
-                if (firePort.Value == 1f)
+                if (firePort.Value == 1f || Firing)
                 {
-                    // override will only reset if the fire is on
+                    // override will only reset if the fire is on or the fireman is trying to start it
                     overrideTriggered = false;
                     return 1.0f;
                 }

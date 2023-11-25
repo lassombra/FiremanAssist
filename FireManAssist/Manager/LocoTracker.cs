@@ -1,11 +1,8 @@
-﻿using DV.Logic.Job;
+﻿using CommsRadioAPI;
 using DV.ThingTypes;
-using RootMotion;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using UnityEngine;
 
 namespace FireManAssist
@@ -13,10 +10,20 @@ namespace FireManAssist
     internal class LocoTracker
     {
         private readonly HashSet<TrainCar> monitoredCars = new HashSet<TrainCar>();
+        public LayerMask TrainCarMask { get; private set; }
+        public LayerMask TrainInteriorMask { get; private set; }
         private void Start()
         {
             FireManAssist.Logger.Log("Starting LocoTracker");
             PlayerManager.CarChanged += PlayerManager_CarChanged;
+            this.TrainCarMask = LayerMask.GetMask(new string[]
+            {
+                "Train_Big_Collider"
+            });
+            this.TrainInteriorMask = LayerMask.GetMask(new string[]
+            {
+                "Train_Interior"
+            });
             PlayerManager_CarChanged(PlayerManager.Car);
         }
         private void Stop()
@@ -28,7 +35,6 @@ namespace FireManAssist
             });
             PlayerManager.CarChanged -= PlayerManager_CarChanged;
         }
-
         private void PlayerManager_CarChanged(TrainCar car)
         {
             bool attached = false;
@@ -62,7 +68,7 @@ namespace FireManAssist
                 });
         }
 
-        private bool MaybeAttachWaterMonitor(TrainCar loco)
+        public bool MaybeAttachWaterMonitor(TrainCar loco)
         {
             if (null != loco)
             {
@@ -91,6 +97,7 @@ namespace FireManAssist
         {
             FireManAssist.Logger.Log("Attaching WaterMonitor to " + loco.name);
             loco.gameObject.AddComponent<WaterMonitor>();
+            loco.gameObject.AddComponent<FireMonitor>();
             loco.OnDestroyCar += Loco_OnDestroyCar;
             monitoredCars.Add(loco);
             loco.TrainsetChanged += Car_TrainsetChanged;
@@ -128,6 +135,4 @@ namespace FireManAssist
             }
         }
     }
-    // S282 - 75% to 85%
-
 }
