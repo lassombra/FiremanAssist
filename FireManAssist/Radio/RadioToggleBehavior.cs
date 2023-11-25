@@ -16,6 +16,7 @@ namespace FireManAssist.Radio
         Transform signalOrigin;
         FireMonitor fireMonitor;
         State lastState = State.Off;
+        private Boolean reloaded = false;
         public RadioToggleBehavior() : this(null, null)
         {
         }
@@ -74,6 +75,11 @@ namespace FireManAssist.Radio
         }
         public override AStateBehaviour OnUpdate(CommsRadioUtility utility)
         {
+            if (reloaded)
+            {
+                this.reloaded = false;
+                return new RadioToggleBehavior();
+            }
             RaycastHit Hit;
             bool found = Physics.Raycast(signalOrigin.position, signalOrigin.forward, out Hit, 100f, LocoTracker.Instance.TrainCarMask);
             bool external = found;
@@ -117,7 +123,6 @@ namespace FireManAssist.Radio
                 }
                 return this;
             } 
-            FireManAssist.Logger.Log("RadioToggleBehavior.PointAtSteam: pointedCar=" + pointedCar + ", car=" + car);
             FireMonitor monitor = car.GetComponent<FireMonitor>();
             if (pointedCar == car && null == monitor)
             {
@@ -135,6 +140,14 @@ namespace FireManAssist.Radio
             {
                 return this;
             }
+        }
+        public override void OnEnter(CommsRadioUtility utility, AStateBehaviour previous)
+        {
+            if (null == previous)
+            {
+                this.reloaded = true;
+            }
+            base.OnEnter(utility, previous);
         }
         public override void OnLeave(CommsRadioUtility utility, AStateBehaviour next)
         {

@@ -67,8 +67,6 @@ namespace FireManAssist
 
         public Single WaterLevel => waterPort.Value;
 
-        public bool CylindersCondensing => (throttle.Value > 0.0f && cylinderTemperature.Value < 50f) || (throttle.Value == 0.0f && cylinderTemperature.Value < 100f);
-
         protected override void Init()
         {
             var trainCar = this.GetComponentInParent<TrainCar>();
@@ -113,7 +111,8 @@ namespace FireManAssist
                 running = false;
                 overrideTriggered = true;
             }
-            if (FireManAssist.Settings.InjectorMode == InjectorOverrideMode.None && lastSetInjector >= 0.0f)
+            if (FireManAssist.Settings.InjectorMode == InjectorOverrideMode.None && lastSetInjector >= 0.0f &&
+                (firePort.Value > 0.0f || Firing))
             {
                 injector.ExternalValueUpdate(lastSetInjector);
             }
@@ -148,11 +147,11 @@ namespace FireManAssist
 
         private void UpdateCylinderCocks()
         {
-            if (cylinderWater.Value >= 0.001f)
+            if (cylinderWater.Value > 0f)
             {
                 cylinderCocks.ExternalValueUpdate(1.0f);
             }
-            else if (cylinderWater.Value <= 0.0f && !CylindersCondensing)
+            else
             {
                 cylinderCocks.ExternalValueUpdate(0.0f);
             }
@@ -170,6 +169,7 @@ namespace FireManAssist
             updateInjector = updateInjector && slowUpdateFrame;
             updateInjector = updateInjector || (0.75f > waterLevel && injectorTarget > 0.0f);
             updateInjector = updateInjector || (0.85f < waterLevel);
+            updateInjector = updateInjector && (firePort.Value > 0.0f || Firing || waterLevel >= 0.75f);
             if (updateInjector)
             {
                 injector.ExternalValueUpdate(injectorTarget);
