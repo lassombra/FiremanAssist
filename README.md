@@ -29,7 +29,7 @@ The injector can be overriden by the user.  The manager has a few options for ho
 #### Fire Management Options
 The fire options only apply while the fire man is firing - when the fire is off and firing wasn't selected through the comm radio, the fireman will do nothing.
 * None - Fireman will never add coal, it's entirely up to you to do so.
-* Keep Burning - Fireman will not let the fire go out, and will start it, but it's up to you to add enough coal for your demand.
+* Keep Burning - Fireman will not let the fire go out, and will not start it, it's up to you to start it, and add enough coal for your demand.  He'll just keep it from going all the way out so you don't have to pull out the lighter while driving.
 * Full - Fireman will do his best to ensure that the coal level is correct for the current pressure, pressure trend, and demand.
 
 There are two other options though that control fireman behavior:
