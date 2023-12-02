@@ -1,4 +1,5 @@
-﻿using System;
+﻿using DV;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -22,11 +23,11 @@ namespace FireManAssist
         public virtual void Update()
         {
             lastUpdate++;
-            if (lastUpdate >= slowUpdateInterval)
+            if (lastUpdate >= slowUpdateInterval && !AppUtil.Instance.IsTimePaused)
             {
                 lastUpdate = 0;
                 InfrequentUpdate(true);
-            } else if (lastUpdate % updateInterval == 0){
+            } else if (lastUpdate % updateInterval == 0 && !AppUtil.Instance.IsTimePaused){
                 InfrequentUpdate(false);
             }
         }
