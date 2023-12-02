@@ -134,8 +134,8 @@ namespace FireManAssist
             {
                 target = 0.05f;
             }
-            // Never more than 85% full, and never less than 0% full.
-            return Math.Min(Math.Max(target, 0.0f), 0.85f);
+            // Never more than 55% full, and never less than 0% full.  More than 55% doesn't actually efficiently raise pressure, but can waste coal.
+            return Math.Min(Math.Max(target, 0.0f), 0.55f);
         }
         private Single Normalize(Single value, Single min, Single max)
         {

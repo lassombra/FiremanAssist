@@ -1,7 +1,7 @@
 ﻿{
   "Id": "FiremanAssistant",
   "Author": "lassombra",
-  "Version": "1.0.0",
+  "Version": "1.0.1",
   "AssemblyName": "FiremanAssistant.dll",
   "EntryMethod": "FireManAssist.FireManAssist.Load",
   "DisplayName": "Fireman Assistant",
