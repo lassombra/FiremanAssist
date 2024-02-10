@@ -1,4 +1,5 @@
 ﻿using CommsRadioAPI;
+using DV.Logic.Job;
 using DV.ThingTypes;
 using System;
 using System.Collections.Generic;
@@ -37,6 +38,23 @@ namespace FireManAssist
         }
         private void PlayerManager_CarChanged(TrainCar car)
         {
+            MaybeAttachWaterMonitorToAllLocos(car);
+        }
+
+        private void Car_TrainsetChanged(Trainset trainset)
+        {
+            trainset?.locoIndices.ForEach(i =>
+                {
+                    var loco = trainset.cars[i];
+                    if (null != loco)
+                    {
+                        MaybeAttachWaterMonitor(loco);
+                    }
+                });
+        }
+
+        public bool MaybeAttachWaterMonitorToAllLocos(TrainCar car)
+        {
             bool attached = false;
             if (null != car)
             {
@@ -52,20 +70,9 @@ namespace FireManAssist
                         MaybeAttachWaterMonitor(loco);
                     }
                 });
-                
-            }
-        }
 
-        private void Car_TrainsetChanged(Trainset trainset)
-        {
-            trainset?.locoIndices.ForEach(i =>
-                {
-                    var loco = trainset.cars[i];
-                    if (null != loco)
-                    {
-                        MaybeAttachWaterMonitor(loco);
-                    }
-                });
+            }
+            return attached;
         }
 
         public bool MaybeAttachWaterMonitor(TrainCar loco)
