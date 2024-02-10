@@ -3,6 +3,7 @@
     {"Id": "FiremanAssistant","Version": "0.0.1","DownloadUrl": "https://github.com/lassombra/FiremanAssist/releases/download/0.0.1/FiremanAssistant.zip"},
     {"Id": "FiremanAssistant","Version": "0.0.2","DownloadUrl": "https://github.com/lassombra/FiremanAssist/releases/download/0.0.2/FiremanAssistant.zip"},
     {"Id": "FiremanAssistant","Version": "0.1.0","DownloadUrl": "https://github.com/lassombra/FiremanAssist/releases/download/0.1.0/FiremanAssistant.0.1.0.zip"},
-    {"Id": "FiremanAssistant","Version": "1.0.0","DownloadUrl": "https://github.com/lassombra/FiremanAssist/releases/download/1.0.0/FiremanAssistant.zip"}
+    {"Id": "FiremanAssistant","Version": "1.0.0","DownloadUrl": "https://github.com/lassombra/FiremanAssist/releases/download/1.0.0/FiremanAssistant.zip"},
+	{"Id": "FiremanAssistant","Version": "1.0.2","DownloadUrl": "https://github.com/lassombra/FiremanAssist/releases/download/1.0.2/FiremanAssistant.zip"}
   ]
 }
