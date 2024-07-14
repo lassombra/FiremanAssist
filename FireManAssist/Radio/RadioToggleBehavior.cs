@@ -1,6 +1,7 @@
 ﻿using CommsRadioAPI;
 using DV;
 using DV.ThingTypes;
+using LocoSim.Definitions;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -96,13 +97,12 @@ namespace FireManAssist.Radio
                 return this;
             }
             TrainCar car = TrainCar.Resolve(Hit.collider.transform);
-            switch (car.carType)
+            if (null != car.gameObject.GetComponentInChildren<BoilerDefinition>())
             {
-                case TrainCarType.LocoSteamHeavy:
-                case TrainCarType.LocoS060:
-                    return PointAtSteam(car, external);
-                default:
-                    return PointAtNotSteam(car);
+                return PointAtSteam(car, external);
+            }
+            else { 
+                return PointAtNotSteam(car);
             }
         }
         private AStateBehaviour PointAtSteam(TrainCar car, bool external)

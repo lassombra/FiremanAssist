@@ -1,5 +1,6 @@
 ﻿using DV.Simulation.Cars;
 using DV.Simulation.Controllers;
+using LocoSim.Definitions;
 using LocoSim.Implementations;
 using System;
 using System.Collections.Generic;
@@ -45,6 +46,7 @@ namespace FireManAssist
         private bool firing = false;
         private Port waterCapacity;
         private readonly float minReserve = 0.1f;
+        private float maxPressure = 14.5f;
 
         public State State { get
             {
@@ -93,6 +95,7 @@ namespace FireManAssist
             {
                 simController.SimulationFlow.TryGetPort("water.NORMALIZED", out this.waterCapacity);
             }
+            maxPressure = trainCar.GetComponent<BoilerDefinition>().safetyValveOpeningPressure;
             //Offset from water monitor since these get added in the same tick
             lastUpdate = 3;
         }
