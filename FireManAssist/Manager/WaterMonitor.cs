@@ -169,7 +169,7 @@ namespace FireManAssist
             updateInjector = updateInjector && slowUpdateFrame;
             updateInjector = updateInjector || (0.75f > waterLevel && injectorTarget > 0.0f);
             updateInjector = updateInjector || (0.85f < waterLevel);
-            updateInjector = updateInjector && (firePort.Value > 0.0f || Firing || waterLevel >= 0.75f);
+            updateInjector = updateInjector && (firePort.Value > 0.0f || Firing || waterLevel >= 0.8f);
             if (updateInjector)
             {
                 injector.ExternalValueUpdate(injectorTarget);
