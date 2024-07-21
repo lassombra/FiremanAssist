@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using UnityEngine;
 
 namespace FireManAssist
 {
@@ -38,15 +39,14 @@ namespace FireManAssist
         // This is how keyboard coal add is simulated.  We use it to add coal to the firebox.
         private MagicShoveling shovelController;
 
-        private Port reverser;
-        private Port throttle;
-
         private Single lastSetDamper;
         private readonly PressureTracker pressureTracker = new PressureTracker();
         private bool firing = false;
         private Port waterCapacity;
         private readonly float minReserve = 0.1f;
         private float maxPressure = 14.5f;
+        private BoilerDefinition definition;
+        private SteamExhaustDefinition exhaustDefinition;
 
         public State State { get
             {
@@ -81,21 +81,28 @@ namespace FireManAssist
                 FireManAssist.Logger.Log("No SimController found");
                 return;
             }
+            definition = trainCar.GetComponentInChildren<BoilerDefinition>();
+            if (null == definition)
+            {
+                Destroy(this);
+                FireManAssist.Logger.Log("No Boiler Definition Found");
+                return;
+            }
+            exhaustDefinition = trainCar.GetComponentInChildren<SteamExhaustDefinition>();
             WaterMonitor = trainCar.GetComponent<WaterMonitor>();
             WaterMonitor.Firing = false;
             fireController = trainCar.GetComponent<SimController>().firebox;
             shovelController = trainCar.GetComponent<MagicShoveling>();
             simController.SimulationFlow.TryGetPort("damper.EXT_IN", out this.damperIn);
             simController.SimulationFlow.TryGetPort("blower.EXT_IN", out this.blowerIn);
-            simController.SimulationFlow.TryGetPort("boiler.PRESSURE", out this.boilerPressure);
-            simController.SimulationFlow.TryGetPort("exhaust.AIR_FLOW", out this.airflow);
-            simController.SimulationFlow.TryGetPort("reverser.REVERSER", out this.reverser);
-            simController.SimulationFlow.TryGetPort("throttle.EXT_IN", out this.throttle);
-            if (!simController.SimulationFlow.TryGetPort("tenderWater.NORMALIZED", out this.waterCapacity))
-            {
-                simController.SimulationFlow.TryGetPort("water.NORMALIZED", out this.waterCapacity);
-            }
-            maxPressure = trainCar.GetComponent<BoilerDefinition>().safetyValveOpeningPressure;
+            simController.SimulationFlow.TryGetPort(definition.ID + "." + definition.pressureReadOut.ID, out this.boilerPressure);
+            simController.SimulationFlow.TryGetPort(exhaustDefinition.ID + "." + exhaustDefinition.airFlowReadOut.ID, out this.airflow);
+            // TODO: Start going through orderedsimcomps for the components that I want to use - specifically 
+            // I need the boiler in order to get it's water consumption port reference so I can get it's water port.
+            string waterSource = simController.connectionsDefinition.portReferenceConnections.First(connection => connection.portReferenceId == definition.ID + "." + definition.water.ID)
+                .portId.Split('.')[0];
+            simController.SimulationFlow.TryGetPort(waterSource + ".NORMALIZED", out this.waterCapacity);
+            maxPressure = definition.safetyValveOpeningPressure;
             //Offset from water monitor since these get added in the same tick
             lastUpdate = 3;
         }
@@ -149,22 +156,9 @@ namespace FireManAssist
             var trend = pressureTracker.UpdateAndCheckTrend(Pressure);
             if (firing && FireOn && SufficientReserve && FireManAssist.Settings.FireMode != FireAssistMode.None)
             {
-                var target = FireboxTarget(trend, Pressure);
-                // if we aren't demanding much from the locomotive, we don't need to add much coal.
-                target = target * Normalize(Math.Abs(throttle.Value), 0.01f, 0.85f) * Normalize(Math.Abs(reverser.Value), 0.01f, 0.75f);
-                if (Pressure < 11.0f && FireManAssist.Settings.FireMode == FireAssistMode.Full)
-                {
-                    // during startup / if we've run out of pressure, we have a *minimum* of 25% coal
-                    target = Math.Max(target, 0.25f);
-                }
-                // anytime we're trying to manage the fire, we need a minimum of 1% coal
-                target = Math.Max(target, 0.01f);
-                Boolean shouldAddCoal = FireboxContentsNormalized <= target;
-                // need some pressure
-                // shouldAddCoal = shouldAddCoal || (trend == Trend.Falling && Pressure <= 13.5f && FireboxContentsNormalized <= 0.5f);
-                // can't keep up with demand
-                // shouldAddCoal = shouldAddCoal || (trend != Trend.Rising && Pressure <= 13.0f && FireboxContentsNormalized <= 0.9f);
-                if (shouldAddCoal)
+                // It's simple, if pressure isn't rising and we're below target, add coal, make hot.
+                bool shouldAddCoal = trend != Trend.Rising && Pressure < (maxPressure - 1.0f);
+                if (shouldAddCoal && slowUpdateFrame)
                 {
                     shovelController.AddCoalToFirebox(1);
                 }
@@ -175,6 +169,7 @@ namespace FireManAssist
             }
             else if (firing && SufficientReserve && FireManAssist.Settings.FireMode == FireAssistMode.Full && WaterMonitor.WaterLevel >= 0.75f)
             {
+                // get a fire going because we're supposed to be on, but we're not.
                 shovelController.AddCoalToFirebox(2);
                 fireController.Ignite();
             }
@@ -184,12 +179,21 @@ namespace FireManAssist
         {
             if (FireManAssist.Settings.FiremanManagesBlowerAndDamper && slowUpdateFrame)
             {
-                lastSetDamper = FireManAssist.CalculateIntervalFromCurve(Pressure, 0.5f, 14.0f, 14.5f, 0.2f);
-                if ((Pressure <= 11.0f || AirFlow <= 1.5f) && lastSetDamper >= 0.99f)
+                // Up to maxPressure - 1 bar we're still trying to add pressure, so don't limit the fire temp.
+                // As we cross that, we want to chill the fire by closing the damper all the way until we are 0.5 bar below safety
+                // at which point we want damper full.
+                // We prefer to max out damper at this point as coal lasts longer than water, and it's better to waste a bit of coal burning poorly than to
+                // waste water popping the safety.
+                lastSetDamper = FireManAssist.CalculateIntervalFromCurve(Pressure, 0.5f, maxPressure - 1.0f, maxPressure - 0.5f, 0.2f);
+                // If we're still in startup mode, or airflow is abysmal (because we're moving very slowly) then turn on the blower - this is especially useful
+                // to get pressure built back up after a hill if the driver closes the throttle which reduces airflow
+                if ((Pressure <= (maxPressure - 3.0f) && AirFlow <= (exhaustDefinition.passiveExhaust + exhaustDefinition.maxBlowerFlow)) && lastSetDamper >= 0.99f)
                 {
                     blowerIn.ExternalValueUpdate(1.0f);
                 }
-                else if ((Pressure >= 14.5f && AirFlow >= 2.0f) || AirFlow >= 3.0f || lastSetDamper <0.99f)
+                // if pressure is high and airflow is still moderate or if airflow has started in earnest, or the damper is 
+                // being closed, then we definitely don't want the blower.
+                else if (Pressure >= (maxPressure - 1.5f) || AirFlow > (exhaustDefinition.passiveExhaust + (2 * exhaustDefinition.maxBlowerFlow)) || lastSetDamper <0.99f)
                 {
                     blowerIn.ExternalValueUpdate(0.0f);
                 }
