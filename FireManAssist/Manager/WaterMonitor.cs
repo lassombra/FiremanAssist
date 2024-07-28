@@ -67,7 +67,7 @@ namespace FireManAssist
         private BoilerDefinition boilerDefinition;
 
         private float minWater;
-
+        private float lastCylinderWater = 0.0f;
         private float aspectRatio;
 
         public Single WaterLevel => waterPort.Value;
@@ -165,14 +165,17 @@ namespace FireManAssist
         private void UpdateCylinderCocks()
         {
             var rate = engineDefinition.maxWaterExpulsionRate;
-            if (cylinderWater.Value > engineDefinition.maxWaterExpulsionRate || cylinderTemperature.Value < 25f)
+            // Open if we have at least half of a normal max clear amount of water, temp is below 25 degrees celsius (been idle for a while) or water is climbing despite the expulsion
+            if (cylinderWater.Value > (engineDefinition.maxWaterExpulsionRate * 0.5f) || cylinderTemperature.Value < 25f || (cylinderWater.Value >= lastCylinderWater && cylinderWater.Value > 0.0f))
             {
                 cylinderCocks.ExternalValueUpdate(1.0f);
             }
-            else if (cylinderTemperature.Value >= 100f ||  cylinderWater.Value <= 0.01f)
+            // Close if temp is over 100 degrees celsius (water won't condense anymore, and will boil off) or we're over 25 degrees celsius (we're warmish) and there's no water left.
+            else if (cylinderTemperature.Value >= 100f ||  (cylinderWater.Value <= 0.0f && cylinderTemperature.Value > 25.0f))
             {
                 cylinderCocks.ExternalValueUpdate(0.0f);
             }
+            lastCylinderWater = cylinderWater.Value;
         }
 
         private void MaybeUpdateInjector(float injectorTarget, float waterLevel, bool slowUpdateFrame)
@@ -255,7 +258,7 @@ namespace FireManAssist
                 running = true;
                 // pressure is reported as 1-19, but we want 0-18 (0-18 bar);
                 var pressure = boilerPressure.Value;
-                var trend = pressureTracker.UpdateAndCheckTrend(pressure);
+                var trends = pressureTracker.UpdateAndCheckTrend(pressure);
                 var curve = WaterCurve.Default;
                 // rule sequence is:
                 // 1) If boiler is below 12 bar, use low pressure curve,
@@ -274,7 +277,7 @@ namespace FireManAssist
                 }
                 else if (pressure < boilerDefinition.safetyValveOpeningPressure - 1.0f)
                 {
-                    if (trend == Trend.Falling || lowPressure)
+                    if (trends.longtermTrend == Trend.Falling || lowPressure)
                     {
                         curve = WaterCurve.LowPressure;
                         lowPressure = true;
