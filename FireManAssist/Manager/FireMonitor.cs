@@ -101,7 +101,7 @@ namespace FireManAssist
             simController.SimulationFlow.TryGetPort("blower.EXT_IN", out this.blowerIn);
             simController.SimulationFlow.TryGetPort(definition.ID + "." + definition.pressureReadOut.ID, out this.boilerPressure);
             simController.SimulationFlow.TryGetPort(exhaustDefinition.ID + "." + exhaustDefinition.airFlowReadOut.ID, out this.airflow);
-            var fireboxTempPortId = simController.connectionsDefinition.portReferenceConnections.First(portReferenceConnection => portReferenceConnection.portReferenceId == definition.ID + "." + definition.fireboxTemperature.ID)
+            var fireboxTempPortId = simController.connectionsDefinition.portReferenceConnections.First(portReferenceConnection => portReferenceConnection.portReferenceId == definition.ID + "." + definition.heat.ID)
                 .portId;
             simController.SimulationFlow.TryGetPort(fireboxTempPortId, out this.fireboxTemp);
             // TODO: Start going through orderedsimcomps for the components that I want to use - specifically 
@@ -171,6 +171,10 @@ namespace FireManAssist
                         damperIn.ExternalValueUpdate(lastSetDamper);
                     }
                     lastFireTemp = fireboxTemp.Value;
+                    if (FireOn)
+                    {
+                        UpdateDamperAndBlower();
+                    }
                     yield return WaitFor.Seconds(0.25f);
                 }
                 if (FireOn && FireManAssist.Settings.FiremanManagesBlowerAndDamper)
@@ -201,7 +205,7 @@ namespace FireManAssist
                 else if (firing && SufficientReserve && FireManAssist.Settings.FireMode == FireAssistMode.Full && WaterMonitor.WaterLevel >= 0.75f)
                 {
                     // get a fire going because we're supposed to be on, but we're not.
-                    shovelController.AddCoalToFirebox(2);
+                    shovelController.AddCoalToFirebox(1);
                     fireController.Ignite();
                 }
                 lastFireTemp = fireboxTemp.Value;
