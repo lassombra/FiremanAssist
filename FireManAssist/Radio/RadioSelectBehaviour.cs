@@ -163,7 +163,7 @@ namespace FireManAssist.Radio
             {
                 if (pointedCar != null && fireMonitor == null)
                 {
-                    LocoTracker.Instance.MaybeAttachWaterMonitorToAllLocos(pointedCar);
+                    LocoTracker.Instance.MaybeAttachWaterMonitorToAllLocos(pointedCar, true);
                 } else if (pointedCar != null)
                 {
                     if (fireMonitor.Mode == Mode.Dismissed)

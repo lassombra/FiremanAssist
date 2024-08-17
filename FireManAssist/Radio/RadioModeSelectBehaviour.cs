@@ -62,14 +62,14 @@ namespace FireManAssist.Radio
                 case InputAction.Activate:
                     fireMonitor.Mode = mode;
                     return new RadioSelectBehaviour(trainCar, fireMonitor);
-                case InputAction.Up:
+                case InputAction.Down:
                     var nextIndex = MODE_ORDER.IndexOf(mode) + 1;
                     if (nextIndex >= MODE_ORDER.Count)
                     {
                         nextIndex = 0;
                     }
                     return new RadioModeSelectBehaviour(trainCar, fireMonitor, MODE_ORDER[nextIndex]);
-                case InputAction.Down:
+                case InputAction.Up:
                     var prevIndex = MODE_ORDER.IndexOf(mode) - 1;
                     if (prevIndex < 0)
                     {
