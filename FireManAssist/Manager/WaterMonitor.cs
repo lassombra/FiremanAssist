@@ -60,7 +60,7 @@ namespace FireManAssist
         // Whether or not we've gone into low pressure mode.  This mode is triggered by a dropping pressure trend while under 13bar and will not be exited until the pressure is above 13bar
         private bool lowPressure = false;
         private bool highPressure = false;
-        public bool Firing { private get; set; }
+        public FireMonitor FireMonitor { get; set; }
         private readonly PressureTracker pressureTracker = new PressureTracker();
 
         private ReciprocatingSteamEngineDefinition engineDefinition;
@@ -122,21 +122,28 @@ namespace FireManAssist
         }
         public override void Update()
         {
-            if (lastSetInjector >= 0.0f && Math.Round(injector.Value, 1) != Math.Round(lastSetInjector, 1) && FireManAssist.Settings.InjectorMode == InjectorOverrideMode.Complete)
+            if (FireMonitor.Mode != Mode.Dismissed)
             {
-                // injector has been manually set, disable full service
-                running = false;
-                overrideTriggered = true;
-            }
-            if (FireManAssist.Settings.InjectorMode == InjectorOverrideMode.None && lastSetInjector >= 0.0f &&
-                (firePort.Value > 0.0f || Firing))
-            {
-                injector.ExternalValueUpdate(lastSetInjector);
+                if (lastSetInjector >= 0.0f && Math.Round(injector.Value, 1) != Math.Round(lastSetInjector, 1) && FireManAssist.Settings.InjectorMode == InjectorOverrideMode.Complete)
+                {
+                    // injector has been manually set, disable full service
+                    running = false;
+                    overrideTriggered = true;
+                }
+                if (FireManAssist.Settings.InjectorMode == InjectorOverrideMode.None && lastSetInjector >= 0.0f &&
+                    (firePort.Value > 0.0f || FireMonitor.Firing))
+                {
+                    injector.ExternalValueUpdate(lastSetInjector);
+                }
             }
             base.Update();
         }
         protected override void InfrequentUpdate(bool slowUpdateFrame)
         {
+            if (FireMonitor.Mode == Mode.Dismissed)
+            {
+                return;
+            }
             float injectorTarget = -1.0f;
             float waterLevel = waterPort.Value;
             float correction = this.aspectRatio / 2f * Mathf.Tan(-this.angleExtIn.Value * 3.1415927f / 180f);
@@ -190,7 +197,7 @@ namespace FireManAssist
             updateInjector = updateInjector && slowUpdateFrame;
             updateInjector = updateInjector || (0.75f > waterLevel && injectorTarget > 0.0f);
             updateInjector = updateInjector || (0.85f < waterLevel);
-            updateInjector = updateInjector && (firePort.Value > 0.0f || Firing || waterLevel >= 0.8f);
+            updateInjector = updateInjector && (firePort.Value > 0.0f || FireMonitor.Firing || waterLevel >= 0.8f);
             if (updateInjector)
             {
                 injector.ExternalValueUpdate(injectorTarget);
@@ -328,7 +335,7 @@ namespace FireManAssist
             if (waterLevel < minWater)
             {
                 blowdown.ExternalValueUpdate(0f);
-                if (firePort.Value == 1f || Firing)
+                if (firePort.Value == 1f || FireMonitor.Firing)
                 {
                     // override will only reset if the fire is on or the fireman is trying to start it
                     overrideTriggered = false;

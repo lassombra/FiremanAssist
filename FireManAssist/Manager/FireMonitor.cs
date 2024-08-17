@@ -20,7 +20,15 @@ namespace FireManAssist
         Running,
         WaterOut
     }
-    internal class FireMonitor : MonoBehaviour
+    public enum Mode
+    {
+        Off,
+        Idle,
+        Shunt,
+        Road,
+        Dismissed
+    }
+    public class FireMonitor : MonoBehaviour
     {
         // Control for damper
         private Port damperIn;
@@ -42,7 +50,6 @@ namespace FireManAssist
         private MagicShoveling shovelController;
 
         private Single lastSetDamper;
-        private bool firing = false;
         private Port waterCapacity;
         private Port fireboxTemp;
         private readonly float minReserve = 0.1f;
@@ -50,14 +57,12 @@ namespace FireManAssist
         private BoilerDefinition definition;
         private SteamExhaustDefinition exhaustDefinition;
 
-        private float lastFireTemp = 0.0f;
-
         public State State { get
             {
-                if (firing && SufficientReserve)
+                if (Firing && SufficientReserve)
                 {
                     return State.Running;
-                } else if (firing) {
+                } else if (Firing) {
                     return State.WaterOut;
                 } else if (FireOn)
                 {
@@ -69,8 +74,16 @@ namespace FireManAssist
             }
         }
 
+        public Mode Mode { get; set; }
+        public bool Firing { get
+            {
+                return Mode != Mode.Off && Mode != Mode.Dismissed;
+            }
+        }
+
         protected void Start()
         {
+            Mode = Mode.Off;
             var trainCar = this.GetComponentInParent<TrainCar>();
             if (null == trainCar)
             {
@@ -94,7 +107,7 @@ namespace FireManAssist
             }
             exhaustDefinition = trainCar.GetComponentInChildren<SteamExhaustDefinition>();
             WaterMonitor = trainCar.GetComponent<WaterMonitor>();
-            WaterMonitor.Firing = false;
+            WaterMonitor.FireMonitor = this;
             fireController = trainCar.GetComponent<SimController>().firebox;
             shovelController = trainCar.GetComponent<MagicShoveling>();
             simController.SimulationFlow.TryGetPort("damper.EXT_IN", out this.damperIn);
@@ -120,11 +133,6 @@ namespace FireManAssist
         public Single WaterReserve => this.waterCapacity.Value;
         public bool SufficientReserve => this.waterCapacity.Value >= this.minReserve;
 
-        public void ToggleFiring()
-        {
-            firing = !firing;
-            WaterMonitor.Firing = firing;
-        }
         private Single Normalize(Single value, Single min, Single max)
         {
             return Math.Max(0.0f, Math.Min(1.0f, (value - min) / (max - min)));
@@ -144,17 +152,14 @@ namespace FireManAssist
                 // wait 1.25 seconds before doing anything fire related
                 for (int i = 0; i < 4; i++)
                 {
-                    if (FireOn && FireManAssist.Settings.FiremanManagesBlowerAndDamper)
+                    if (FireOn && FireManAssist.Settings.FiremanManagesBlowerAndDamper && Mode != Mode.Dismissed)
                     {
                         damperIn.ExternalValueUpdate(lastSetDamper);
-                    }
-                    if (FireOn)
-                    {
                         UpdateDamperAndBlower();
                     }
                     foreach (var yieldInstruction in WaitForUnpaused(0.25f)) yield return yieldInstruction;
                 }
-                if (firing && FireOn && SufficientReserve && FireManAssist.Settings.FireMode != FireAssistMode.None)
+                if (Firing && FireOn && SufficientReserve && FireManAssist.Settings.FireMode != FireAssistMode.None)
                 {
                     FireManAssist.Logger.Log(Time.time + ": Deciding whether to add coal");
                     updateDeltas(Pressure, fireboxTemp.Value, ref t_dot, ref p_dot, ref t_ddot, ref p_ddot, ref lastPressure, ref lastTemperature);
@@ -164,9 +169,15 @@ namespace FireManAssist
                     FireManAssist.Logger.Log("\tseconds: " + secondsSinceLastCoal);
                     // It's simple, if pressure isn't rising and we're below target, add coal, make hot.
                     // Don't even try if we're above this pressure
-                    bool shouldAddCoal = Pressure < (maxPressure - 1.0f);
+                    var lowPressureThreshold = 1.0f;
+                    if (Mode == Mode.Shunt)
+                    {
+                        lowPressureThreshold = 2.0f;
+                    }
+                    bool shouldAddCoal = Pressure < (maxPressure - lowPressureThreshold);
                     shouldAddCoal &= determineCoalByTimeAndDeltas(secondsSinceLastCoal, t_dot, t_ddot, p_dot, p_ddot);
                     // extra handle, if we're really low and coal is below 25% full, add more
+                    shouldAddCoal = shouldAddCoal && (Mode != Mode.Idle || FireboxContentsNormalized < 0.01f);
                     shouldAddCoal = shouldAddCoal || (Pressure < (maxPressure - 4.0f) && FireboxContentsNormalized < 0.25f);
                     FireManAssist.Logger.Log("Add coal: " + shouldAddCoal);
                     if (shouldAddCoal)
@@ -178,7 +189,7 @@ namespace FireManAssist
                         secondsSinceLastCoal++;
                     }
                 }
-                else if (firing && SufficientReserve && FireManAssist.Settings.FireMode == FireAssistMode.Full && WaterMonitor.WaterLevel >= 0.75f)
+                else if (Firing && SufficientReserve && FireManAssist.Settings.FireMode == FireAssistMode.Full && WaterMonitor.WaterLevel >= 0.75f)
                 {
                     FireManAssist.Logger.Log("Igniting fire");
                     // get a fire going because we're supposed to be on, but we're not.
@@ -202,10 +213,19 @@ namespace FireManAssist
         {
             float min_t_ddot = -0.5f;
             float min_p_ddot = -0.05f;
-            if (secondsSinceLastCoal > 5 && (t_dot < min_t_ddot || p_dot < 0))
+            int mediumInterval = 2;
+            int longInterval = 5;
+            if (Mode == Mode.Shunt)
+            {
+                min_t_ddot = -1.0f;
+                min_p_ddot = -0.5f;
+                mediumInterval = 5;
+                longInterval = 10;
+            }
+            if (secondsSinceLastCoal > longInterval && (t_dot < min_t_ddot || p_dot < 0))
             {
                 return true;
-            } else if (secondsSinceLastCoal > 2 && (t_dot < min_t_ddot && p_dot < min_p_ddot))
+            } else if (secondsSinceLastCoal > mediumInterval && (t_dot < min_t_ddot && p_dot < min_p_ddot))
             {
                 return true;
             } else if (t_dot < 0 && t_ddot < 0 && p_dot < 0 && p_ddot < 0)

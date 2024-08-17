@@ -25,7 +25,7 @@ namespace FireManAssist
         }
         internal static void InitCommRadio()
         {
-            CommsRadioMode = CommsRadioMode.Create(new RadioToggleBehavior(), laserColor: new Color(0.8f, 0.333f, 0f));
+            CommsRadioMode = CommsRadioMode.Create(new RadioSelectBehaviour(), laserColor: new Color(0.8f, 0.333f, 0f));
         }
 
 
