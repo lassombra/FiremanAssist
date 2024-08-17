@@ -103,7 +103,6 @@
     <Compile Include="Radio\RadioToggleBehavior.cs" />
     <Compile Include="Settings.cs" />
     <Compile Include="Manager\WaterMonitor.cs" />
-    <Compile Include="Trends.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="info.json">

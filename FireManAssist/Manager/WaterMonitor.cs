@@ -63,11 +63,6 @@ namespace FireManAssist
         public bool Firing { private get; set; }
         private readonly PressureTracker pressureTracker = new PressureTracker();
 
-        private ReciprocatingSteamEngineDefinition engineDefinition;
-        private BoilerDefinition boilerDefinition;
-
-        private float minWater;
-        private float lastCylinderWater = 0.0f;
         private float aspectRatio;
 
         public Single WaterLevel => waterPort.Value;
@@ -94,30 +89,18 @@ namespace FireManAssist
                 FireManAssist.Logger.Log("Water port not found");
                 return;
             }
-            engineDefinition = trainCar.GetComponentInChildren<ReciprocatingSteamEngineDefinition>();
-            if (null == engineDefinition)
-            {
-                Destroy(this);
-                FireManAssist.Logger.Log("No reciprocating engine definition found");
-                return;
-            }
-            boilerDefinition = trainCar.GetComponentInChildren<BoilerDefinition>();
-            if (null == boilerDefinition)
-            {
-                Destroy(this);
-                FireManAssist.Logger.Log("Boiler definition not found");
-                return;
-            }
-            minWater = boilerDefinition.crownSheetNormalizedWaterLevel;
+            //boilerDefinition = trainCar.GetComponentInChildren<BoilerDefinition>();
+            //setup ports we need
             simController.SimulationFlow.TryGetPort("firebox.FIRE_ON", out this.firePort);
             simController.SimulationFlow.TryGetPort("injector.EXT_IN", out this.injector);
             simController.SimulationFlow.TryGetPort("blowdown.EXT_IN", out this.blowdown);
-            simController.SimulationFlow.TryGetPort(boilerDefinition.ID + "." + boilerDefinition.pressureReadOut.ID, out this.boilerPressure);
+            simController.SimulationFlow.TryGetPort("boiler.PRESSURE", out this.boilerPressure);
             simController.SimulationFlow.TryGetPort("boiler.BOILER_ANGLE_EXT_IN", out this.angleExtIn);
+            simController.SimulationFlow.TryGetPort("steamEngine.WATER_IN_CYLINDERS_NORMALIZED", out this.cylinderWater);
+            simController.SimulationFlow.TryGetPort("steamEngine.CYLINDER_TEMPERATURE", out this.cylinderTemperature);
             simController.SimulationFlow.TryGetPort("cylinderCock.EXT_IN", out this.cylinderCocks);
-            simController.SimulationFlow.TryGetPort(engineDefinition.ID + "." + engineDefinition.cylinderTemperatureReadOut.ID, out this.cylinderTemperature);
-            simController.SimulationFlow.TryGetPort(engineDefinition.ID + "." + engineDefinition.waterInCylindersNormalizedReadOut.ID, out this.cylinderWater);
             simController.SimulationFlow.TryGetPort("throttle.EXT_IN", out this.throttle);
+            var boilerDefinition = trainCar.GetComponentInChildren<BoilerDefinition>();
             aspectRatio = boilerDefinition.length / boilerDefinition.diameter;
         }
         public override void Update()
@@ -164,18 +147,14 @@ namespace FireManAssist
 
         private void UpdateCylinderCocks()
         {
-            var rate = engineDefinition.maxWaterExpulsionRate;
-            // Open if we have at least half of a normal max clear amount of water, temp is below 25 degrees celsius (been idle for a while) or water is climbing despite the expulsion
-            if (cylinderWater.Value > (engineDefinition.maxWaterExpulsionRate * 0.5f) || cylinderTemperature.Value < 25f || (cylinderWater.Value >= lastCylinderWater && cylinderWater.Value > 0.0f))
+            if (cylinderWater.Value > 0f)
             {
                 cylinderCocks.ExternalValueUpdate(1.0f);
             }
-            // Close if temp is over 100 degrees celsius (water won't condense anymore, and will boil off) or we're over 25 degrees celsius (we're warmish) and there's no water left.
-            else if (cylinderTemperature.Value >= 100f ||  (cylinderWater.Value <= 0.0f && cylinderTemperature.Value > 25.0f))
+            else
             {
                 cylinderCocks.ExternalValueUpdate(0.0f);
             }
-            lastCylinderWater = cylinderWater.Value;
         }
 
         private void MaybeUpdateInjector(float injectorTarget, float waterLevel, bool slowUpdateFrame)
@@ -190,7 +169,7 @@ namespace FireManAssist
             updateInjector = updateInjector && slowUpdateFrame;
             updateInjector = updateInjector || (0.75f > waterLevel && injectorTarget > 0.0f);
             updateInjector = updateInjector || (0.85f < waterLevel);
-            updateInjector = updateInjector && (firePort.Value > 0.0f || Firing || waterLevel >= 0.8f);
+            updateInjector = updateInjector && (firePort.Value > 0.0f || Firing || waterLevel >= 0.75f);
             if (updateInjector)
             {
                 injector.ExternalValueUpdate(injectorTarget);
@@ -204,23 +183,19 @@ namespace FireManAssist
         /// </summary>
         /// <param name="curve">The curve to use to determine the injector target</param>
         /// <param name="waterLevel">The current water level</param>
-        public static float CalculateInjectorTargetCurve(float waterLevel, WaterCurve curve, float minWater)
+        public static float CalculateInjectorTargetCurve(float waterLevel, WaterCurve curve)
         {
-            var min = minWater + 0.04f;
-            var low = min + 0.01667f;
-            var max = minWater + 0.1f;
-            var nominal = minWater + 0.06667f;
             switch (curve)
             {
                 case WaterCurve.LowPressure:
-                    return CalculateInjectorTarget(waterLevel, 4.0f, min, nominal);
+                    return CalculateInjectorTarget(waterLevel, 4.0f, 0.77f, 0.81667f);
                 case WaterCurve.HighPressure:
-                    return CalculateInjectorTarget(waterLevel, 1 / 3.0f, nominal, max);
+                    return CalculateInjectorTarget(waterLevel, 1 / 3.0f, 0.8f, 0.85f);
                 case WaterCurve.Startup:
-                    return CalculateInjectorTarget(waterLevel, 4.0f, min, low);
+                    return CalculateInjectorTarget(waterLevel, 4.0f, 0.75f, 0.76f);
                 case WaterCurve.Default:
                 default:
-                    return CalculateInjectorTarget(waterLevel, 2.0f, min, nominal);
+                    return CalculateInjectorTarget(waterLevel, 2.0f, 0.77f, 0.81667f);
             }
         }
 
@@ -257,8 +232,8 @@ namespace FireManAssist
             {
                 running = true;
                 // pressure is reported as 1-19, but we want 0-18 (0-18 bar);
-                var pressure = boilerPressure.Value;
-                var trends = pressureTracker.UpdateAndCheckTrend(pressure);
+                var pressure = boilerPressure.Value - 1.0f;
+                var trend = pressureTracker.UpdateAndCheckTrend(pressure);
                 var curve = WaterCurve.Default;
                 // rule sequence is:
                 // 1) If boiler is below 12 bar, use low pressure curve,
@@ -266,30 +241,30 @@ namespace FireManAssist
                 // 3) If boiler is above 13 bar, reset lowPressure flag
                 // 4) If boiler is above 14 bar, use high pressure curve
                 // 5) if all else fails, use default curve
-                if (pressure < boilerDefinition.safetyValveOpeningPressure - 5f)
+                if (pressure < 9.0f)
                 {
                     curve = WaterCurve.Startup;
                 }
-                else if (pressure < boilerDefinition.safetyValveOpeningPressure - 2.0f)
+                else if (pressure < 12.0f)
                 {
                     highPressure = false;
-                    curve = WaterCurve.LowPressure;
+                    curve= WaterCurve.LowPressure;
                 }
-                else if (pressure < boilerDefinition.safetyValveOpeningPressure - 1.0f)
+                else if (pressure < 13.0f)
                 {
-                    if (trends.longtermTrend == Trend.Falling || lowPressure)
+                    if (trend == Trend.Falling || lowPressure)
                     {
                         curve = WaterCurve.LowPressure;
                         lowPressure = true;
                         highPressure = false;
                     }
                 }
-                else if (pressure > boilerDefinition.safetyValveOpeningPressure - 0.2f)
+                else if (pressure > 13.8f)
                 {
                     curve = WaterCurve.HighPressure;
                     lowPressure = false;
                     highPressure = true;
-                } else if (highPressure && pressure >= boilerDefinition.safetyValveOpeningPressure - 0.5f)
+                } else if (highPressure && pressure >= 13.5f)
                 {
                     curve = WaterCurve.HighPressure;
                 } else
@@ -298,7 +273,7 @@ namespace FireManAssist
                     lowPressure = false;
                     highPressure = false;
                 }
-                return CalculateInjectorTargetCurve(waterLevel, curve, minWater);
+                return CalculateInjectorTargetCurve(waterLevel, curve);
             } else
             {
                 // we had a fire, now we don't, initially turn off the injector.  User can turn it back on (to prime for example) but otherwise we'll just fall through to OverUnderHandler
@@ -314,7 +289,7 @@ namespace FireManAssist
         {
             // If water level is above 0.85, turn off injector.
             // otherwise fall through to MinimumHandler
-            if (waterLevel > minWater + 0.1f)
+            if (waterLevel > 0.85f)
             {
                 overrideTriggered = false;
                 return 0.0f;
@@ -325,7 +300,7 @@ namespace FireManAssist
         {
             // If water level is below 0.75, turn off blowdown.
             // if fire is on also, turn on injector
-            if (waterLevel < minWater)
+            if (waterLevel < 0.75f)
             {
                 blowdown.ExternalValueUpdate(0f);
                 if (firePort.Value == 1f || Firing)
