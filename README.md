@@ -12,6 +12,8 @@ Entering a supported loco will add a fireman to that loco.  You can also request
 * Cylinder Cock control (useful when using MU mods to run multiple steam units)
 * Each locomotive is managed independently
 * Low Tender Water auto shutdown - prevents automatically adding coal when the tender is low on water - thus protecting against getting into an uncontrolled fire state with not enough water to add to the boiler.
+* ***NEW*** Dismissable fireman - Fireman can be dismissed, and can be set to not auto add to an existing loco
+* ***NEW*** Multiple firing levels selectable through the radio.
 
 #### Water Management Options
 Water management in 4 levels, selectable through UMM settings window:
@@ -32,9 +34,21 @@ The fire options only apply while the fire man is firing - when the fire is off 
 * Keep Burning - Fireman will not let the fire go out, and will not start it, it's up to you to start it, and add enough coal for your demand.  He'll just keep it from going all the way out so you don't have to pull out the lighter while driving.
 * Full - Fireman will do his best to ensure that the coal level is correct for the current pressure, pressure trend, and demand.
 
-There are two other options though that control fireman behavior:
+There are three other options though that control fireman behavior:
 * Fireman manages blower and damper - if off, the fireman will leave these controls alone, allowing you to manually control them - a good first step towards full firing.
 * Enable Auto Cylinder Cocks - **DEFAULT OFF** if on, then the fireman will open and close cylinder cocks automatically.  He will only open them if there is water in them and is _really efficient_ about closing them.  I'm hoping to make this a bit more realistic in the future.
+* Auto Add Fireman - Default On.  If On, fireman will be added automatically to any steam locomotive you board, and any steam locomotive that is coupled to the same train as a fireman.  If Off, you have to use the radio.
+
+## Radio Behavior
+The radio is now much more involved and gives you much more control over the algorithm the fireman will use.  Once a fireman is on your locomotive (done either through automatic mode, or by selecting a locomotive with the fireman control radio mode) you have several options:
+* Off - stops adding coal and lets the fire burn out - recommended for use if you want to guarantee full replenishment before leaving the locomotive to avoid lingering fees.  This is the default mode.
+* Minimum - Barely keeps the fire going, uses safety - 4 bar as it's minimum pressure, and doesn't even try for that very hard - won't add coal unless the fire is very low or the pressure is.
+* Shunting - Allows for wider pressure variance to offset the inconsistent demand of shunting operations.   This allows for a higher likelyhood of white smoke while shunting as the fire is usually not too hot, and dramatically reduces the chance of popping the safety while shunting.
+* Full - This is intended for long distance use where demand will likely be more stable, as the train isn't starting and stopping so even if it's transitioning a grade, it'll have just had a sustained climb to get pressure used up.  This will provide maximum pressure build up, but has a tendency to pop the safety if misused.
+* Dismiss - This option will dismiss the fireman.  Useful if you've got one onboard automatically, or you chose to request one, but now you don't want them.  Once dismissed, firemen will not come back automatically and must be requested back through the comm radio.
+* Cancel - this will revert to the current fire mode
+When pointing at a locomotive with a fireman, the radio will indicate the current mode, or if the fireman is in the process of moving to off mode.  It will also indicate if the fireman has stopped adding coal because the tender/tank water is low.
+
 
 ### Planned Updates
 * MU Mode - sets all engines except the one you were most recently in to "full management" with all features enabled, allowing you to have a fleet of locomotives behind you with working firemen while you can manage fire and water manually if you want in the front.  This will pair well with a future release of the no-cable MU mod which is adding support for steam engines.

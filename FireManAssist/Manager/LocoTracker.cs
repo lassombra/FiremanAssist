@@ -1,6 +1,7 @@
 ﻿using CommsRadioAPI;
 using DV.Logic.Job;
 using DV.ThingTypes;
+using LocoSim.Definitions;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -53,12 +54,12 @@ namespace FireManAssist
                 });
         }
 
-        public bool MaybeAttachWaterMonitorToAllLocos(TrainCar car)
+        public bool MaybeAttachWaterMonitorToAllLocos(TrainCar car, bool radio = false)
         {
             bool attached = false;
             if (null != car)
             {
-                attached = MaybeAttachWaterMonitor(car);
+                attached = MaybeAttachWaterMonitor(car, radio);
             }
             if (attached)
             {
@@ -75,22 +76,16 @@ namespace FireManAssist
             return attached;
         }
 
-        public bool MaybeAttachWaterMonitor(TrainCar loco)
+        public bool MaybeAttachWaterMonitor(TrainCar loco, bool radio = false)
         {
+            if (!FireManAssist.Settings.AutoAddFireman && !radio)
+            {
+                return false;
+            }
             if (null != loco)
             {
                 FireManAssist.Logger.Log("MaybeAttachWaterMonitor " + loco.name);
-                bool supportedLoco = false;
-                switch(loco.carType)
-                {
-                    case TrainCarType.LocoS060:
-                    case TrainCarType.LocoSteamHeavy:
-                        supportedLoco = true;
-                        break;
-                    default:
-                        supportedLoco = false;
-                        break;
-                }
+                bool supportedLoco = null != loco.GetComponentInChildren<BoilerDefinition>();
                 if (supportedLoco && null == loco.GetComponent<WaterMonitor>())
                 {
                     AttachMonitor(loco);

@@ -1,6 +1,7 @@
 ﻿using CommsRadioAPI;
 using DV;
 using DV.ThingTypes;
+using LocoSim.Definitions;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -10,17 +11,17 @@ using UnityEngine;
 
 namespace FireManAssist.Radio
 {
-    internal class RadioToggleBehavior : AStateBehaviour
+    internal class RadioSelectBehaviour : AStateBehaviour
     {
         TrainCar pointedCar;
         Transform signalOrigin;
         FireMonitor fireMonitor;
         State lastState = State.Off;
         private Boolean reloaded = false;
-        public RadioToggleBehavior() : this(null, null)
+        public RadioSelectBehaviour() : this(null, null)
         {
         }
-        public RadioToggleBehavior(TrainCar pointedCar, FireMonitor monitor): base(new CommsRadioState(titleText: "Fireman Control", contentText: GetContentText(pointedCar, monitor), actionText: GetActionText(pointedCar, monitor)))
+        public RadioSelectBehaviour(TrainCar pointedCar, FireMonitor monitor): base(new CommsRadioState(titleText: "Fireman Control", contentText: GetContentText(pointedCar, monitor), actionText: GetActionText(pointedCar, monitor)))
         {
             this.pointedCar = pointedCar;
             this.fireMonitor = monitor;
@@ -33,21 +34,11 @@ namespace FireManAssist.Radio
             {
                 return "";
             }
-            else if (null == monitor)
+            else if (null == monitor || monitor.Mode == Mode.Dismissed)
             {
                 return "Call Fireman";
             }
-            switch (monitor.State)
-            {
-                case State.Off:
-                case State.ShuttingDown:
-                    return "Start Firing";
-                case State.Running:
-                case State.WaterOut:
-                    return "Shut Down";
-                default:
-                    return "";
-            }
+            return "Select mode";
         }
         public static String GetContentText(TrainCar pointedCar, FireMonitor monitor)
         {
@@ -55,7 +46,7 @@ namespace FireManAssist.Radio
             {
                 return "Select a Steam Locomotive";
             }
-            else if (null == monitor)
+            else if (null == monitor || monitor.Mode == Mode.Dismissed)
             {
                 return "No Fireman aboard";
             }
@@ -65,12 +56,25 @@ namespace FireManAssist.Radio
                     return "Fire off";
                 case State.ShuttingDown:
                     return "Shutting down fire";
-                case State.Running:
-                    return "Fire on";
                 case State.WaterOut:
                     return "Out of Water";
+                case State.Running:
+                    return GetModeText(monitor.Mode);
                 default:
                     return "Unknown state";
+            }
+        }
+        public static String GetModeText(Mode mode)
+        {
+            switch (mode)
+            {
+                case Mode.Idle:
+                    return "Minimum fire";
+                case Mode.Shunt:
+                    return "Shunting fire";
+                case Mode.Road:
+                default:
+                    return "Full fire";
             }
         }
         public override AStateBehaviour OnUpdate(CommsRadioUtility utility)
@@ -78,7 +82,7 @@ namespace FireManAssist.Radio
             if (reloaded)
             {
                 this.reloaded = false;
-                return new RadioToggleBehavior();
+                return new RadioSelectBehaviour();
             }
             RaycastHit Hit;
             bool found = Physics.Raycast(signalOrigin.position, signalOrigin.forward, out Hit, 100f, LocoTracker.Instance.TrainCarMask);
@@ -90,19 +94,18 @@ namespace FireManAssist.Radio
             if (!found&& pointedCar != null)
             {
                 HighLighter.Instance.HighlightCar(null);
-                return new RadioToggleBehavior(null, null);
+                return new RadioSelectBehaviour(null, null);
             } else if (!found)
             {
                 return this;
             }
             TrainCar car = TrainCar.Resolve(Hit.collider.transform);
-            switch (car.carType)
+            if (null != car.gameObject.GetComponentInChildren<BoilerDefinition>())
             {
-                case TrainCarType.LocoSteamHeavy:
-                case TrainCarType.LocoS060:
-                    return PointAtSteam(car, external);
-                default:
-                    return PointAtNotSteam(car);
+                return PointAtSteam(car, external);
+            }
+            else { 
+                return PointAtNotSteam(car);
             }
         }
         private AStateBehaviour PointAtSteam(TrainCar car, bool external)
@@ -119,7 +122,7 @@ namespace FireManAssist.Radio
             {
                 if (lastState != fireMonitor.State)
                 {
-                    return new RadioToggleBehavior(pointedCar, fireMonitor);
+                    return new RadioSelectBehaviour(pointedCar, fireMonitor);
                 }
                 return this;
             } 
@@ -128,14 +131,14 @@ namespace FireManAssist.Radio
             {
                 return this;
             }
-            return new RadioToggleBehavior(car, monitor);
+            return new RadioSelectBehaviour(car, monitor);
         }
         private AStateBehaviour PointAtNotSteam(TrainCar car)
         {
             HighLighter.Instance.HighlightCar(null);
             if (pointedCar)
             {
-                return new RadioToggleBehavior(null, null);
+                return new RadioSelectBehaviour(null, null);
             } else
             {
                 return this;
@@ -160,12 +163,20 @@ namespace FireManAssist.Radio
             {
                 if (pointedCar != null && fireMonitor == null)
                 {
-                    LocoTracker.Instance.MaybeAttachWaterMonitorToAllLocos(pointedCar);
+                    LocoTracker.Instance.MaybeAttachWaterMonitorToAllLocos(pointedCar, true);
                 } else if (pointedCar != null)
                 {
-                    fireMonitor.ToggleFiring();
+                    if (fireMonitor.Mode == Mode.Dismissed)
+                    {
+                        fireMonitor.Mode = Mode.Off;
+                        return new RadioSelectBehaviour(pointedCar, fireMonitor);
+                    }
+                    else
+                    {
+                        return new RadioModeSelectBehaviour(pointedCar, fireMonitor);
+                    }
                 }
-                return new RadioToggleBehavior(pointedCar, pointedCar?.GetComponent<FireMonitor>());
+                return new RadioSelectBehaviour(pointedCar, pointedCar?.GetComponent<FireMonitor>());
             }
             else
             {
