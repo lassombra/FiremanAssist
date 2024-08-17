@@ -16,7 +16,7 @@ namespace FireManAssist
     {
         private float[] _pressureHistory = new float[5];
         private int _historyIndex = 0;
-        public Trends UpdateAndCheckTrend(float pressure)
+        public Trend UpdateAndCheckTrend(float pressure)
         {
             var lastPressure = GetLastPressure();
             _pressureHistory[_historyIndex] = pressure;
@@ -28,7 +28,7 @@ namespace FireManAssist
             var oldestPressure = getOldestPresure();
             if (oldestPressure == 0f)
             {
-                return new Trends(lastPressure != 0f ? GetTrendFromStates(lastPressure, pressure) : Trend.Steady, Trend.Steady);
+                return Trend.Steady;
             }
             return GetTrend(oldestPressure, lastPressure, pressure);
         }
@@ -45,17 +45,17 @@ namespace FireManAssist
         {
             return _pressureHistory[_historyIndex];
         }
-        private Trends GetTrend(float oldestPressure, float lastPressure, float pressure)
+        private Trend GetTrend(float oldestPressure, float lastPressure, float pressure)
         {
             var immediateTrend = GetTrendFromStates(lastPressure, pressure);
             var longTermTrend = GetTrendFromStates(oldestPressure, pressure);
             if (immediateTrend == longTermTrend)
             {
-                return new Trends(immediateTrend, longTermTrend);
+                return immediateTrend;
             }
             else
             {
-                return new Trends(immediateTrend, Trend.Steady);
+                return Trend.Steady;
             }
         }
 
