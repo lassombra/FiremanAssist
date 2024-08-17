@@ -1,6 +1,7 @@
 ﻿using CommsRadioAPI;
 using DV.Logic.Job;
 using DV.ThingTypes;
+using LocoSim.Definitions;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -80,17 +81,7 @@ namespace FireManAssist
             if (null != loco)
             {
                 FireManAssist.Logger.Log("MaybeAttachWaterMonitor " + loco.name);
-                bool supportedLoco = false;
-                switch(loco.carType)
-                {
-                    case TrainCarType.LocoS060:
-                    case TrainCarType.LocoSteamHeavy:
-                        supportedLoco = true;
-                        break;
-                    default:
-                        supportedLoco = false;
-                        break;
-                }
+                bool supportedLoco = null != loco.GetComponentInChildren<BoilerDefinition>();
                 if (supportedLoco && null == loco.GetComponent<WaterMonitor>())
                 {
                     AttachMonitor(loco);
