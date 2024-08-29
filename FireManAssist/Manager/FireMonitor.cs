@@ -161,12 +161,7 @@ namespace FireManAssist
                 }
                 if (Firing && FireOn && SufficientReserve && FireManAssist.Settings.FireMode != FireAssistMode.None)
                 {
-                    FireManAssist.Logger.Log(Time.time + ": Deciding whether to add coal");
                     updateDeltas(Pressure, fireboxTemp.Value, ref t_dot, ref p_dot, ref t_ddot, ref p_ddot, ref lastPressure, ref lastTemperature);
-                    FireManAssist.Logger.Log("\tt_dot: " + t_dot + "\tt_ddot: " + t_ddot);
-                    FireManAssist.Logger.Log("\tp_dot: " + p_dot + "\tp_ddot: " + p_ddot);
-                    FireManAssist.Logger.Log("\tt: " + fireboxTemp.Value + "\tp: " + Pressure);
-                    FireManAssist.Logger.Log("\tseconds: " + secondsSinceLastCoal);
                     // It's simple, if pressure isn't rising and we're below target, add coal, make hot.
                     // Don't even try if we're above this pressure
                     var lowPressureThreshold = 1.0f;
@@ -179,7 +174,6 @@ namespace FireManAssist
                     // extra handle, if we're really low and coal is below 25% full, add more
                     shouldAddCoal = shouldAddCoal && (Mode != Mode.Idle || FireboxContentsNormalized < 0.01f);
                     shouldAddCoal = shouldAddCoal || (Pressure < (maxPressure - 4.0f) && FireboxContentsNormalized < 0.25f);
-                    FireManAssist.Logger.Log("Add coal: " + shouldAddCoal);
                     if (shouldAddCoal)
                     {
                         shovelController.AddCoalToFirebox(1);
