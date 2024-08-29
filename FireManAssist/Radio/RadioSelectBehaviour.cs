@@ -85,11 +85,11 @@ namespace FireManAssist.Radio
                 return new RadioSelectBehaviour();
             }
             RaycastHit Hit;
-            bool found = Physics.Raycast(signalOrigin.position, signalOrigin.forward, out Hit, 100f, LocoTracker.Instance.TrainCarMask);
+            bool found = Physics.Raycast(signalOrigin.position, signalOrigin.forward, out Hit, 100f, FireManAssist.TrainCarMask);
             bool external = found;
             if (!found)
             {
-                found = Physics.Raycast(signalOrigin.position, signalOrigin.forward, out Hit, 100f, LocoTracker.Instance.TrainInteriorMask);
+                found = Physics.Raycast(signalOrigin.position, signalOrigin.forward, out Hit, 100f, FireManAssist.TrainInteriorMask);
             }
             if (!found&& pointedCar != null)
             {
@@ -161,10 +161,7 @@ namespace FireManAssist.Radio
         {
             if (action == InputAction.Activate)
             {
-                if (pointedCar != null && fireMonitor == null)
-                {
-                    LocoTracker.Instance.MaybeAttachWaterMonitorToAllLocos(pointedCar, true);
-                } else if (pointedCar != null)
+                if (pointedCar != null)
                 {
                     if (fireMonitor.Mode == Mode.Dismissed)
                     {

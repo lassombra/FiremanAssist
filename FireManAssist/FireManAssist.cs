@@ -14,6 +14,8 @@ namespace FireManAssist
         internal static ModLogger Logger { get; private set; }
         internal static Settings Settings { get; private set; }
         internal static CommsRadioMode CommsRadioMode { get; private set; }
+        public static LayerMask TrainCarMask { get; private set; }
+        public static LayerMask TrainInteriorMask { get; private set; }
         static bool Load(UnityModManager.ModEntry modEntry)
         {
             modEntry.OnToggle = OnToggle;
@@ -26,6 +28,14 @@ namespace FireManAssist
         internal static void InitCommRadio()
         {
             CommsRadioMode = CommsRadioMode.Create(new RadioSelectBehaviour(), laserColor: new Color(0.8f, 0.333f, 0f));
+            TrainCarMask = LayerMask.GetMask(new string[]
+            {
+                "Train_Big_Collider"
+            });
+            TrainInteriorMask = LayerMask.GetMask(new string[]
+            {
+                "Train_Interior"
+            });
         }
 
 
@@ -43,35 +53,14 @@ namespace FireManAssist
             if (value)
             {
                 Logger = modEntry.Logger;
-                WorldStreamingInit.LoadingFinished += Start;
-                UnloadWatcher.UnloadRequested += Stop;
                 var harmony = new Harmony(modEntry.Info.Id);
                 harmony.PatchAll(Assembly.GetExecutingAssembly());
-                if (WorldStreamingInit.Instance && WorldStreamingInit.IsLoaded)
-                {
-                    Start();
-                }
             } 
             else
             {
-                WorldStreamingInit.LoadingFinished -= Start;
-                UnloadWatcher.UnloadRequested -= Stop;
-                Stop();
             }
             return true;
         }
-        static void Start()
-        {
-            Logger.Log("Starting FireManAssist");
-
-            LocoTracker.Create();
-        }
-        static void Stop()
-        {
-            Logger.Log("Stopping FireManAssist");
-            LocoTracker.Destroy();
-        }
-
         /// <summary>
         /// Determines an interval output based on an input value, a factor, and a range.
         /// </summary>

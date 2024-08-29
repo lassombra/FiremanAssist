@@ -33,7 +33,6 @@ namespace FireManAssist
         [Draw(DrawType.Toggle, Label ="Enable Auto Cylinder Cocks")] public bool AutoCylinderCocks = false;
         [Draw(DrawType.ToggleGroup, Label= "Fire Assist Mode")] public FireAssistMode FireMode = FireAssistMode.Full;
         [Draw(DrawType.Toggle, Label = "Fireman manages blower and damper")] public bool FiremanManagesBlowerAndDamper = true;
-        [Draw(DrawType.Toggle, Label = "Auto Add Fireman")] public bool AutoAddFireman = true;
 
         public void OnChange()
         { }

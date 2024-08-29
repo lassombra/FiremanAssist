@@ -96,8 +96,9 @@
     <Compile Include="AbstractInfrequentUpdateComponent.cs" />
     <Compile Include="FireManAssist.cs" />
     <Compile Include="Manager\FireMonitor.cs" />
-    <Compile Include="Manager\LocoTracker.cs" />
+    <Compile Include="Manager\FireMonitorDefinition.cs" />
     <Compile Include="Manager\PressureTracker.cs" />
+    <Compile Include="Patches\FireMonitorAddPatch.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Radio\HighLighter.cs" />
     <Compile Include="Radio\RadioModeSelectBehaviour.cs" />
