@@ -1,9 +1,11 @@
 ﻿using DV;
+using DV.JObjectExtstensions;
 using DV.Simulation.Cars;
 using DV.Simulation.Controllers;
 using FireManAssist.Manager;
 using LocoSim.Definitions;
 using LocoSim.Implementations;
+using Newtonsoft.Json.Linq;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -80,7 +82,7 @@ namespace FireManAssist
             this.definition = definition;
         }
 
-        private State calculateState()
+        private State CalculateState()
         {
             if (Firing && SufficientReserve)
             {
@@ -184,7 +186,7 @@ namespace FireManAssist
                     shouldAddCoal &= determineCoalByTimeAndDeltas(secondsSinceLastCoal, t_dot, t_ddot, p_dot, p_ddot);
                     // extra handle, if we're really low and coal is below 25% full, add more
                     shouldAddCoal = shouldAddCoal && ((Mode)mode.Value != Mode.Idle || FireboxContentsNormalized < 0.01f);
-                    shouldAddCoal = shouldAddCoal || (Pressure < (MaxPressure - 4.0f) && FireboxContentsNormalized < 0.25f);
+                    shouldAddCoal = shouldAddCoal || (Pressure < (MaxPressure - 4.0f) && FireboxContentsNormalized < 0.15f);
                     if (shouldAddCoal)
                     {
                         shovelController.AddCoalToFirebox(1);
@@ -280,6 +282,12 @@ namespace FireManAssist
 
         public override void Tick(float delta)
         {
+            if (this.firing.Value == 0 && (this.FireOn || (this.Mode != Mode.Dismissed && this.Mode != Mode.Off))) {
+                this.firing.Value = 1;
+            } else if (this.firing.Value == 1 && (!this.FireOn && (this.Mode == Mode.Dismissed || this.Mode == Mode.Off))) {
+                this.firing.Value = 0;
+            }
+            UpdateState();
             if (Waiting > 0.0f)
             {
                 Waiting -= delta;
@@ -287,6 +295,26 @@ namespace FireManAssist
             }
             Sequence.MoveNext();
             Waiting = Sequence.Current;
+        }
+
+        private void UpdateState()
+        {
+            var state = CalculateState();
+            if (this.State != state)
+            {
+                this.state.Value = (float)state;
+            }
+        }
+        public override bool HasSaveData { get { return true; } }
+        public override JObject GetSaveStateData()
+        {
+            var saveData = new JObject();
+            saveData.SetInt("mode", (int)(this.mode.Value));
+            return saveData;
+        }
+        public override void SetSaveStateData(JObject savedData)
+        {
+            this.mode.Value = (float)savedData.GetInt("mode");
         }
     }
 }

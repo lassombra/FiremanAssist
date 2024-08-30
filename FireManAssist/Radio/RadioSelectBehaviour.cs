@@ -1,6 +1,7 @@
 ﻿using CommsRadioAPI;
 using DV;
 using DV.ThingTypes;
+using FireManAssist.Manager;
 using LocoSim.Definitions;
 using System;
 using System.Collections.Generic;
@@ -15,20 +16,20 @@ namespace FireManAssist.Radio
     {
         TrainCar pointedCar;
         Transform signalOrigin;
-        FireMonitor fireMonitor;
+        FireModeController fireModeController;
         State lastState = State.Off;
         private Boolean reloaded = false;
         public RadioSelectBehaviour() : this(null, null)
         {
         }
-        public RadioSelectBehaviour(TrainCar pointedCar, FireMonitor monitor): base(new CommsRadioState(titleText: "Fireman Control", contentText: GetContentText(pointedCar, monitor), actionText: GetActionText(pointedCar, monitor)))
+        public RadioSelectBehaviour(TrainCar pointedCar, FireModeController monitor): base(new CommsRadioState(titleText: "Fireman Control", contentText: GetContentText(pointedCar, monitor), actionText: GetActionText(pointedCar, monitor)))
         {
             this.pointedCar = pointedCar;
-            this.fireMonitor = monitor;
-            lastState = monitor?.State ?? State.Off;
+            this.fireModeController = monitor;
+            lastState = monitor?.Condition ?? State.Off;
             signalOrigin = ((JunctionRemoteLogic)ControllerAPI.GetVanillaMode(VanillaMode.Junction)).signalOrigin;
         }
-        public static String GetActionText(TrainCar pointedCar, FireMonitor monitor)
+        public static String GetActionText(TrainCar pointedCar, FireModeController monitor)
         {
             if (null == pointedCar)
             {
@@ -40,7 +41,7 @@ namespace FireManAssist.Radio
             }
             return "Select mode";
         }
-        public static String GetContentText(TrainCar pointedCar, FireMonitor monitor)
+        public static String GetContentText(TrainCar pointedCar, FireModeController monitor)
         {
             if (null == pointedCar)
             {
@@ -50,7 +51,7 @@ namespace FireManAssist.Radio
             {
                 return "No Fireman aboard";
             }
-            switch (monitor.State)
+            switch (monitor.Condition)
             {
                 case State.Off:
                     return "Fire off";
@@ -100,7 +101,7 @@ namespace FireManAssist.Radio
                 return this;
             }
             TrainCar car = TrainCar.Resolve(Hit.collider.transform);
-            if (null != car.gameObject.GetComponentInChildren<BoilerDefinition>())
+            if (null != car.gameObject.GetComponentInChildren<FireModeController>())
             {
                 return PointAtSteam(car, external);
             }
@@ -118,15 +119,15 @@ namespace FireManAssist.Radio
             {
                 HighLighter.Instance.HighlightCar(null);
             }
-            if (pointedCar == car && null != fireMonitor)
+            if (pointedCar == car && null != fireModeController)
             {
-                if (lastState != fireMonitor.State)
+                if (lastState != fireModeController.Condition)
                 {
-                    return new RadioSelectBehaviour(pointedCar, fireMonitor);
+                    return new RadioSelectBehaviour(pointedCar, fireModeController);
                 }
                 return this;
-            } 
-            FireMonitor monitor = car.GetComponent<FireMonitor>();
+            }
+            FireModeController monitor = car.GetComponentInChildren<FireModeController>();
             if (pointedCar == car && null == monitor)
             {
                 return this;
@@ -163,17 +164,17 @@ namespace FireManAssist.Radio
             {
                 if (pointedCar != null)
                 {
-                    if (fireMonitor.Mode == Mode.Dismissed)
+                    if (fireModeController.Mode == Mode.Dismissed)
                     {
-                        fireMonitor.Mode = Mode.Off;
-                        return new RadioSelectBehaviour(pointedCar, fireMonitor);
+                        fireModeController.Mode = Mode.Off;
+                        return new RadioSelectBehaviour(pointedCar, fireModeController);
                     }
                     else
                     {
-                        return new RadioModeSelectBehaviour(pointedCar, fireMonitor);
+                        return new RadioModeSelectBehaviour(pointedCar, fireModeController);
                     }
                 }
-                return new RadioSelectBehaviour(pointedCar, pointedCar?.GetComponent<FireMonitor>());
+                return new RadioSelectBehaviour(pointedCar, pointedCar?.GetComponentInChildren<FireModeController>());
             }
             else
             {

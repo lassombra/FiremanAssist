@@ -1,4 +1,5 @@
 ﻿using DV;
+using DV.Simulation.Cars;
 using DV.Simulation.Controllers;
 using FireManAssist.Manager;
 using HarmonyLib;
@@ -30,11 +31,17 @@ namespace FireManAssist.Patches
                     var steamExhaust = prefab.GetComponentInChildren<SteamExhaustDefinition>();
                     var shoveling = prefab.GetComponentInChildren<MagicShoveling>();
                     var definition = boiler.transform.parent.gameObject.AddComponent<FireMonitorDefinition>();
+                    definition.ID = "fire_monitor";
                     definition.boiler = boiler; ;
                     definition.shoveling = shoveling;
                     definition.steamExhaust = steamExhaust;
 
                     ConfigurePortReferences(prefab, definition);
+                    var controller = prefab.GetComponentInChildren<SimController>();
+                    var go = new GameObject("fireModeControl");
+                    var modeController = go.AddComponent<FireModeController>();
+                    go.transform.parent = controller.transform;
+                    controller.otherSimControllers = controller.otherSimControllers.AddToArray(modeController);
                 }
             });
         }
@@ -54,41 +61,27 @@ namespace FireManAssist.Patches
             string waterPort = null;
             if (onBoardWater != null)
             {
-                waterPort = MakePortId(onBoardWater, onBoardWater.normalizedReadOut);
+                waterPort = PortHelpers.MakePortId(onBoardWater, onBoardWater.normalizedReadOut);
             } else if (tenderWater != null)
             {
                 waterPort = tenderWater.consumerPortId;
             }
             var newDefinitions = new PortReferenceConnection[]
             {
-                new PortReferenceConnection(MakePortId(definition, definition.damperIn), getExistingConnection(fireboxDefinition, fireboxDefinition.damperControl, connections)),
-                new PortReferenceConnection(MakePortId(definition, definition.ignition), MakePortId(fireboxDefinition, fireboxDefinition.ignitionExtIn)),
-                new PortReferenceConnection(MakePortId(definition, definition.blowerIn), getExistingConnection(steamExhaustDefinition, steamExhaustDefinition.blowerControl, connections)),
-                new PortReferenceConnection(MakePortId(definition, definition.airflow), MakePortId(steamExhaustDefinition, steamExhaustDefinition.airFlowReadOut)),
-                new PortReferenceConnection(MakePortId(definition, definition.boilerPressure), MakePortId(boiler, boiler.pressureReadOut)),
-                new PortReferenceConnection(MakePortId(definition, definition.boilerWaterLevel), MakePortId(boiler, boiler.waterLevelReadOut)),
-                new PortReferenceConnection(MakePortId(definition, definition.fireboxTemp), MakePortId(fireboxDefinition, fireboxDefinition.temperatureReadOut)),
-                new PortReferenceConnection(MakePortId(definition, definition.firePort), MakePortId(fireboxDefinition, fireboxDefinition.fireOnReadOut)),
-                new PortReferenceConnection(MakePortId(definition, definition.coalLevel), MakePortId(fireboxDefinition, fireboxDefinition.coalLevelReadOut)),
-                new PortReferenceConnection(MakePortId(definition, definition.coalCapacity), MakePortId(fireboxDefinition, fireboxDefinition.coalCapacityReadOut)),
-                new PortReferenceConnection(MakePortId(definition, definition.waterNormalized), waterPort ?? ""),
+                new PortReferenceConnection(PortHelpers.MakePortId(definition, definition.damperIn), PortHelpers.getExistingConnection(fireboxDefinition, fireboxDefinition.damperControl, connections)),
+                new PortReferenceConnection(PortHelpers.MakePortId(definition, definition.ignition), PortHelpers.MakePortId(fireboxDefinition, fireboxDefinition.ignitionExtIn)),
+                new PortReferenceConnection(PortHelpers.MakePortId(definition, definition.blowerIn), PortHelpers.getExistingConnection(steamExhaustDefinition, steamExhaustDefinition.blowerControl, connections)),
+                new PortReferenceConnection(PortHelpers.MakePortId(definition, definition.airflow), PortHelpers.MakePortId(steamExhaustDefinition, steamExhaustDefinition.airFlowReadOut)),
+                new PortReferenceConnection(PortHelpers.MakePortId(definition, definition.boilerPressure), PortHelpers.MakePortId(boiler, boiler.pressureReadOut)),
+                new PortReferenceConnection(PortHelpers.MakePortId(definition, definition.boilerWaterLevel), PortHelpers.MakePortId(boiler, boiler.waterLevelReadOut)),
+                new PortReferenceConnection(PortHelpers.MakePortId(definition, definition.fireboxTemp), PortHelpers.MakePortId(fireboxDefinition, fireboxDefinition.temperatureReadOut)),
+                new PortReferenceConnection(PortHelpers.MakePortId(definition, definition.firePort), PortHelpers.MakePortId(fireboxDefinition, fireboxDefinition.fireOnReadOut)),
+                new PortReferenceConnection(PortHelpers.MakePortId(definition, definition.coalLevel), PortHelpers.MakePortId(fireboxDefinition, fireboxDefinition.coalLevelReadOut)),
+                new PortReferenceConnection(PortHelpers.MakePortId(definition, definition.coalCapacity), PortHelpers.MakePortId(fireboxDefinition, fireboxDefinition.coalCapacityReadOut)),
+                new PortReferenceConnection(PortHelpers.MakePortId(definition, definition.waterNormalized), waterPort ?? ""),
             };
             connections.executionOrder = connections.executionOrder.AddItem(definition).ToArray();
             connections.portReferenceConnections = connections.portReferenceConnections.AddRangeToArray(newDefinitions);
-        }
-        private static string getExistingConnection(SimComponentDefinition definition, PortReferenceDefinition portReferenceDefinition, SimConnectionDefinition connections)
-        {
-            return (from p in connections.portReferenceConnections
-             where p.portReferenceId == MakePortId(definition, portReferenceDefinition)
-             select p).FirstOrDefault()?.portId;
-        }
-        private static string MakePortId(SimComponentDefinition definition, PortDefinition portDefinition)
-        {
-            return definition.ID + "." + portDefinition.ID;
-        }
-        private static string MakePortId(SimComponentDefinition definition, PortReferenceDefinition portReferenceDefinition)
-        {
-            return definition.ID + "." + portReferenceDefinition.ID;
         }
     }
 }
