@@ -1,5 +1,6 @@
 ﻿using DV.HUD;
 using DV.Simulation.Cars;
+using FireManAssist.Manager;
 using LocoSim.Definitions;
 using LocoSim.Implementations;
 using System;
@@ -40,7 +41,6 @@ namespace FireManAssist
         // The amount of water in the cylinders
         private Port cylinderWater;
         private Port cylinderTemperature;
-        private Port throttle;
 
         //Control to open / close the cylinder cocks
         private Port cylinderCocks;
@@ -60,7 +60,7 @@ namespace FireManAssist
         // Whether or not we've gone into low pressure mode.  This mode is triggered by a dropping pressure trend while under 13bar and will not be exited until the pressure is above 13bar
         private bool lowPressure = false;
         private bool highPressure = false;
-        public FireMonitor FireMonitor { get; set; }
+        public FireModeController FireMonitor { get; set; }
         private readonly PressureTracker pressureTracker = new PressureTracker();
 
         private ReciprocatingSteamEngineDefinition engineDefinition;
@@ -108,6 +108,7 @@ namespace FireManAssist
                 FireManAssist.Logger.Log("Boiler definition not found");
                 return;
             }
+            FireMonitor = trainCar.GetComponentInChildren<FireModeController>();
             minWater = boilerDefinition.crownSheetNormalizedWaterLevel;
             simController.SimulationFlow.TryGetPort("firebox.FIRE_ON", out this.firePort);
             simController.SimulationFlow.TryGetPort("injector.EXT_IN", out this.injector);
@@ -117,8 +118,8 @@ namespace FireManAssist
             simController.SimulationFlow.TryGetPort("cylinderCock.EXT_IN", out this.cylinderCocks);
             simController.SimulationFlow.TryGetPort(engineDefinition.ID + "." + engineDefinition.cylinderTemperatureReadOut.ID, out this.cylinderTemperature);
             simController.SimulationFlow.TryGetPort(engineDefinition.ID + "." + engineDefinition.waterInCylindersNormalizedReadOut.ID, out this.cylinderWater);
-            simController.SimulationFlow.TryGetPort("throttle.EXT_IN", out this.throttle);
             aspectRatio = boilerDefinition.length / boilerDefinition.diameter;
+            
         }
         public override void Update()
         {
@@ -195,9 +196,9 @@ namespace FireManAssist
             updateInjector = updateInjector || (FireManAssist.Settings.InjectorMode == InjectorOverrideMode.None && injectorTarget >= 0.0f);
             updateInjector = updateInjector || (injectorTarget >= 0.0f && lastSetInjector != injectorTarget);
             updateInjector = updateInjector && slowUpdateFrame;
-            updateInjector = updateInjector || (0.75f > waterLevel && injectorTarget > 0.0f);
-            updateInjector = updateInjector || (0.85f < waterLevel);
-            updateInjector = updateInjector && (firePort.Value > 0.0f || FireMonitor.Firing || waterLevel >= 0.8f);
+            updateInjector = updateInjector || (minWater > waterLevel && injectorTarget > 0.0f);
+            updateInjector = updateInjector || (minWater+0.1f < waterLevel);
+            updateInjector = updateInjector && (firePort.Value > 0.0f || FireMonitor.Firing || waterLevel >= minWater + 0.05f);
             if (updateInjector)
             {
                 injector.ExternalValueUpdate(injectorTarget);

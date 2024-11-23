@@ -29,6 +29,7 @@ namespace FireManAssist.Manager
         public PortDefinition firing = new PortDefinition(PortType.READONLY_OUT, PortValueType.STATE, "FIRING");
         public PortDefinition condition = new PortDefinition(PortType.READONLY_OUT, PortValueType.STATE, "CONDITION");
         public PortDefinition mode = new PortDefinition(PortType.EXTERNAL_IN, PortValueType.CONTROL, "MODE");
+        //public PortDefinition usage = new PortDefinition(PortType.EXTERNAL_IN, PortValueType.GENERIC, "ACTIVE_FIREMAN_TIME");
 
         public override SimComponent InstantiateImplementation()
         {

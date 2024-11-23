@@ -98,6 +98,7 @@
   <ItemGroup>
     <Compile Include="AbstractInfrequentUpdateComponent.cs" />
     <Compile Include="FireManAssist.cs" />
+    <Compile Include="Patches\ResourcePatches.cs" />
     <Compile Include="Radio\FireModeController.cs" />
     <Compile Include="Manager\FireMonitor.cs" />
     <Compile Include="Manager\FireMonitorDefinition.cs" />

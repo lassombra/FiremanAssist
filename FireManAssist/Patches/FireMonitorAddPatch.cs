@@ -9,6 +9,7 @@ using LocoSim.Resources;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.AccessControl;
 using System.Text;
 using System.Threading.Tasks;
 using UnityEngine;
@@ -30,21 +31,32 @@ namespace FireManAssist.Patches
                     var boiler = prefab.GetComponentInChildren<BoilerDefinition>();
                     var steamExhaust = prefab.GetComponentInChildren<SteamExhaustDefinition>();
                     var shoveling = prefab.GetComponentInChildren<MagicShoveling>();
-                    var definition = boiler.transform.parent.gameObject.AddComponent<FireMonitorDefinition>();
+                    var go = new GameObject("fireman");
+                    go.transform.parent = boiler.transform.parent;
+                    var definition = go.AddComponent<FireMonitorDefinition>();
                     definition.ID = "fire_monitor";
                     definition.boiler = boiler; ;
                     definition.shoveling = shoveling;
                     definition.steamExhaust = steamExhaust;
-
+                    //CreateFiremanResource(prefab, go, definition);
                     ConfigurePortReferences(prefab, definition);
                     var controller = prefab.GetComponentInChildren<SimController>();
-                    var go = new GameObject("fireModeControl");
                     var modeController = go.AddComponent<FireModeController>();
-                    go.transform.parent = controller.transform;
                     controller.otherSimControllers = controller.otherSimControllers.AddToArray(modeController);
+                    go.AddComponent<WaterMonitor>();
                 }
             });
         }
+
+        //private static void CreateFiremanResource(GameObject prefab, GameObject go, FireMonitorDefinition definition)
+        //{
+        //    var controller = prefab.GetComponentInChildren<EnvironmentDamageController>();
+        //    var damager = go.AddComponent<EnvironmentDamager>();
+        //    damager.damagerPortId = PortHelpers.MakePortId(definition, definition.usage);
+        //    damager.environmentDamageResource = (DV.ThingTypes.ResourceType)(ResourceType)150;
+        //    go.transform.parent = controller.transform;
+        //    controller.entries = controller.entries.AddToArray(damager);
+        //}
 
         private static void ConfigurePortReferences(GameObject prefab, FireMonitorDefinition definition)
         {
@@ -68,7 +80,7 @@ namespace FireManAssist.Patches
             }
             var newDefinitions = new PortReferenceConnection[]
             {
-                new PortReferenceConnection(PortHelpers.MakePortId(definition, definition.damperIn), PortHelpers.getExistingConnection(fireboxDefinition, fireboxDefinition.damperControl, connections)),
+                new PortReferenceConnection(PortHelpers.MakePortId(definition, definition.damperIn), PortHelpers.getExistingConnection(steamExhaustDefinition, steamExhaustDefinition.damperControl, connections)),
                 new PortReferenceConnection(PortHelpers.MakePortId(definition, definition.ignition), PortHelpers.MakePortId(fireboxDefinition, fireboxDefinition.ignitionExtIn)),
                 new PortReferenceConnection(PortHelpers.MakePortId(definition, definition.blowerIn), PortHelpers.getExistingConnection(steamExhaustDefinition, steamExhaustDefinition.blowerControl, connections)),
                 new PortReferenceConnection(PortHelpers.MakePortId(definition, definition.airflow), PortHelpers.MakePortId(steamExhaustDefinition, steamExhaustDefinition.airFlowReadOut)),

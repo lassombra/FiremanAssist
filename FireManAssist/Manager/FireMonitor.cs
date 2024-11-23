@@ -61,6 +61,7 @@ namespace FireManAssist
         private Port firing;
         private Port state;
         private Port mode;
+        //private Port usage;
 
         public FireMonitor(FireMonitorDefinition definition) : base(definition.ID)
         {
@@ -78,6 +79,7 @@ namespace FireManAssist
             firing = base.AddPort(definition.firing);
             state = base.AddPort(definition.condition);
             mode = base.AddPort(definition.mode, (float)Mode.Dismissed);
+            //usage = base.AddPort(definition.usage);
             shovelController = definition.shoveling;
             this.definition = definition;
         }
@@ -135,6 +137,7 @@ namespace FireManAssist
         public Single MaxPressure => definition.boiler.safetyValveOpeningPressure;
         public Single PassiveExhaust => definition.steamExhaust.passiveExhaust;
         public Single MaxBlowerFlow => definition.steamExhaust.maxBlowerFlow;
+        public Single MinWaterLevel => definition.boiler.crownSheetNormalizedWaterLevel;
 
         private Single Normalize(Single value, Single min, Single max)
         {
@@ -172,6 +175,7 @@ namespace FireManAssist
                     }
                     yield return 0.25f;
                 }
+                //FireManAssist.Logger.Log("Updating actions");
                 if (Firing && FireOn && SufficientReserve && FireManAssist.Settings.FireMode != FireAssistMode.None)
                 {
                     updateDeltas(Pressure, fireboxTemp.Value, ref t_dot, ref p_dot, ref t_ddot, ref p_ddot, ref lastPressure, ref lastTemperature);
@@ -189,6 +193,7 @@ namespace FireManAssist
                     shouldAddCoal = shouldAddCoal || (Pressure < (MaxPressure - 4.0f) && FireboxContentsNormalized < 0.15f);
                     if (shouldAddCoal)
                     {
+                        FireManAssist.Logger.Log("Adding coal");
                         shovelController.AddCoalToFirebox(1);
                         secondsSinceLastCoal = 0;
                     } else
@@ -196,7 +201,7 @@ namespace FireManAssist
                         secondsSinceLastCoal++;
                     }
                 }
-                else if (Firing && SufficientReserve && FireManAssist.Settings.FireMode == FireAssistMode.Full && boilerWaterLevel.Value >= 0.75f)
+                else if (Firing && SufficientReserve && FireManAssist.Settings.FireMode == FireAssistMode.Full && boilerWaterLevel.Value >= MinWaterLevel)
                 {
                     FireManAssist.Logger.Log("Igniting fire");
                     // get a fire going because we're supposed to be on, but we're not.
@@ -229,6 +234,7 @@ namespace FireManAssist
                 mediumInterval = 5;
                 longInterval = 10;
             }
+            //FireManAssist.Logger.Log("Determining coal\nt_dot: " + t_dot + "\tt_ddot: " + t_ddot + "\tp_dot: " + p_dot + "\tp_ddot: " + p_ddot);
             if (secondsSinceLastCoal > longInterval && (t_dot < min_t_ddot || p_dot < 0))
             {
                 return true;
@@ -295,6 +301,10 @@ namespace FireManAssist
             }
             Sequence.MoveNext();
             Waiting = Sequence.Current;
+            if (this.Firing && FireManAssist.Settings.FiremanCostsFess)
+            {
+                //usage.Value += delta;
+            }
         }
 
         private void UpdateState()
@@ -310,11 +320,13 @@ namespace FireManAssist
         {
             var saveData = new JObject();
             saveData.SetInt("mode", (int)(this.mode.Value));
+            //saveData.SetFloat("usage", this.usage.Value);
             return saveData;
         }
         public override void SetSaveStateData(JObject savedData)
         {
-            this.mode.Value = (float)savedData.GetInt("mode");
+            this.mode.Value = savedData.GetInt("mode") ?? (int)Mode.Dismissed;
+            //this.usage.Value = savedData.GetFloat("usage") ?? 0.0f;
         }
     }
 }

@@ -13,6 +13,7 @@ namespace FireManAssist.Manager
     {
         private Port mode;
         private Port condition;
+        private Port firing;
 
         public Mode Mode
         {
@@ -34,6 +35,14 @@ namespace FireManAssist.Manager
             }
         }
 
+        public bool Firing
+        {
+            get
+            {
+                return firing.Value > 0;
+            }
+        }
+
         public override void Init(TrainCar car, SimulationFlow simFlow)
         {
             var firemanControllerDefinition = car.GetComponentInChildren<FireMonitorDefinition>();
@@ -41,6 +50,7 @@ namespace FireManAssist.Manager
             {
                 simFlow.TryGetPort(PortHelpers.MakePortId(firemanControllerDefinition, firemanControllerDefinition.mode), out this.mode);
                 simFlow.TryGetPort(PortHelpers.MakePortId(firemanControllerDefinition, firemanControllerDefinition.condition), out this.condition);
+                simFlow.TryGetPort(PortHelpers.MakePortId(firemanControllerDefinition, firemanControllerDefinition.firing), out this.firing);
             }
         }
     }
