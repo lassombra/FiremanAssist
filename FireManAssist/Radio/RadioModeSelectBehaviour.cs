@@ -1,4 +1,5 @@
 ﻿using CommsRadioAPI;
+using FireManAssist.Manager;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -14,19 +15,19 @@ namespace FireManAssist.Radio
             Mode.Road,
             Mode.Dismissed
         });
-        private FireMonitor fireMonitor;
+        private FireModeController fireModeController;
         private TrainCar trainCar;
         private Mode mode;
 
-        public RadioModeSelectBehaviour(TrainCar trainCar, FireMonitor fireMonitor) : this(trainCar, fireMonitor, fireMonitor.Mode) { }
+        public RadioModeSelectBehaviour(TrainCar trainCar, FireModeController fireModeController) : this(trainCar, fireModeController, fireModeController.Mode) { }
 
-        public RadioModeSelectBehaviour(TrainCar trainCar, FireMonitor fireMonitor, Mode mode) : base(BuildCommsRadioState(trainCar, fireMonitor, mode))
+        public RadioModeSelectBehaviour(TrainCar trainCar, FireModeController fireModeController, Mode mode) : base(BuildCommsRadioState(trainCar, fireModeController, mode))
         {
-            this.fireMonitor = fireMonitor;
+            this.fireModeController = fireModeController;
             this.trainCar = trainCar;
             this.mode = mode;
         }
-        private static CommsRadioState BuildCommsRadioState(TrainCar trainCar, FireMonitor fireMonitor, Mode selectedMode)
+        private static CommsRadioState BuildCommsRadioState(TrainCar trainCar, FireModeController fireMonitor, Mode selectedMode)
         {
             var actionText = "";
             switch (selectedMode)
@@ -60,24 +61,24 @@ namespace FireManAssist.Radio
             switch (action)
             {
                 case InputAction.Activate:
-                    fireMonitor.Mode = mode;
-                    return new RadioSelectBehaviour(trainCar, fireMonitor);
+                    fireModeController.Mode = mode;
+                    return new RadioSelectBehaviour(trainCar, fireModeController);
                 case InputAction.Down:
                     var nextIndex = MODE_ORDER.IndexOf(mode) + 1;
                     if (nextIndex >= MODE_ORDER.Count)
                     {
                         nextIndex = 0;
                     }
-                    return new RadioModeSelectBehaviour(trainCar, fireMonitor, MODE_ORDER[nextIndex]);
+                    return new RadioModeSelectBehaviour(trainCar, fireModeController, MODE_ORDER[nextIndex]);
                 case InputAction.Up:
                     var prevIndex = MODE_ORDER.IndexOf(mode) - 1;
                     if (prevIndex < 0)
                     {
                         prevIndex = MODE_ORDER.Count - 1;
                     }
-                    return new RadioModeSelectBehaviour(trainCar, fireMonitor, MODE_ORDER[prevIndex]);
+                    return new RadioModeSelectBehaviour(trainCar, fireModeController, MODE_ORDER[prevIndex]);
                 default:
-                    return new RadioModeSelectBehaviour(trainCar, fireMonitor);
+                    return new RadioModeSelectBehaviour(trainCar, fireModeController);
             }
         }
     }

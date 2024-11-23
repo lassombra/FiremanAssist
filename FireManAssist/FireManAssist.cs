@@ -1,4 +1,6 @@
 ﻿using CommsRadioAPI;
+using DV;
+using DV.ThingTypes;
 using FireManAssist.Radio;
 using HarmonyLib;
 using System;
@@ -14,6 +16,9 @@ namespace FireManAssist
         internal static ModLogger Logger { get; private set; }
         internal static Settings Settings { get; private set; }
         internal static CommsRadioMode CommsRadioMode { get; private set; }
+        public static LayerMask TrainCarMask { get; private set; }
+        public static LayerMask TrainInteriorMask { get; private set; }
+        public static ResourceType_v2 firemanActiveResource { get; private set; }
         static bool Load(UnityModManager.ModEntry modEntry)
         {
             modEntry.OnToggle = OnToggle;
@@ -21,11 +26,38 @@ namespace FireManAssist
             modEntry.OnGUI = OnGUI;
             modEntry.OnSaveGUI = OnSaveGUI;
             ControllerAPI.Ready += InitCommRadio;
+            CreateResource();
             return true;
         }
+
+        private static void CreateResource()
+        {
+            var resource = new ResourceType_v2();
+            resource.isConsumable = false;
+            resource.isTaxable = false;
+            resource.v1 = (ResourceType)150;
+            resource.canBeDamaged = false;
+            resource.canDamageEnvironment = false;
+            resource.price = 0.83f;
+            resource.resourceIcon = Globals.G.Types.ResourceType_to_v2[ResourceType.Coal].resourceIcon;
+            resource.name = "Fireman";
+            resource.id = "resource_fireman";
+            Globals.G.Types.resources.Add(resource);
+            Globals.G.Types.RecalculateCaches();
+            firemanActiveResource = resource;
+        }
+
         internal static void InitCommRadio()
         {
             CommsRadioMode = CommsRadioMode.Create(new RadioSelectBehaviour(), laserColor: new Color(0.8f, 0.333f, 0f));
+            TrainCarMask = LayerMask.GetMask(new string[]
+            {
+                "Train_Big_Collider"
+            });
+            TrainInteriorMask = LayerMask.GetMask(new string[]
+            {
+                "Train_Interior"
+            });
         }
 
 
@@ -43,35 +75,14 @@ namespace FireManAssist
             if (value)
             {
                 Logger = modEntry.Logger;
-                WorldStreamingInit.LoadingFinished += Start;
-                UnloadWatcher.UnloadRequested += Stop;
                 var harmony = new Harmony(modEntry.Info.Id);
                 harmony.PatchAll(Assembly.GetExecutingAssembly());
-                if (WorldStreamingInit.Instance && WorldStreamingInit.IsLoaded)
-                {
-                    Start();
-                }
             } 
             else
             {
-                WorldStreamingInit.LoadingFinished -= Start;
-                UnloadWatcher.UnloadRequested -= Stop;
-                Stop();
             }
             return true;
         }
-        static void Start()
-        {
-            Logger.Log("Starting FireManAssist");
-
-            LocoTracker.Create();
-        }
-        static void Stop()
-        {
-            Logger.Log("Stopping FireManAssist");
-            LocoTracker.Destroy();
-        }
-
         /// <summary>
         /// Determines an interval output based on an input value, a factor, and a range.
         /// </summary>

@@ -1,8 +1,11 @@
 ﻿using DV;
+using DV.JObjectExtstensions;
 using DV.Simulation.Cars;
 using DV.Simulation.Controllers;
+using FireManAssist.Manager;
 using LocoSim.Definitions;
 using LocoSim.Implementations;
+using Newtonsoft.Json.Linq;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -22,122 +25,135 @@ namespace FireManAssist
     }
     public enum Mode
     {
+        Dismissed,
         Off,
         Idle,
         Shunt,
-        Road,
-        Dismissed
+        Road
     }
-    public class FireMonitor : MonoBehaviour
+    public class FireMonitor : SimComponent
     {
         // Control for damper
-        private Port damperIn;
+        private PortReference damperIn;
         // control for blower
-        private Port blowerIn;
+        private PortReference blowerIn;
         // current airflow through the firebox - this is used instead of forward speed because it takes into account more variables
         // a real fireman would have a pretty good idea of what this would be in a given situation, so it's a pretty good proxy for "locomotive state"
         // when low and pressure is low, then the blower should be on
-        private Port airflow;
+        private PortReference airflow;
 
         // The boiler pressure port, used to monitor the boiler pressure and adjust the damper curves accordingly
-        private Port boilerPressure;
-        private WaterMonitor WaterMonitor;
+        private PortReference boilerPressure;
+        private PortReference boilerWaterLevel;
 
-        // this is the firebox itself - it's a useful object as it has a lot of the variables we need
-        // and it's guaranteed to be present for the two locomotives we're supporting
-        private FireboxSimController fireController;
         // This is how keyboard coal add is simulated.  We use it to add coal to the firebox.
         private MagicShoveling shovelController;
 
         private Single lastSetDamper;
-        private Port waterCapacity;
-        private Port fireboxTemp;
+        private PortReference waterNormalized;
+        private PortReference fireboxTemp;
         private readonly float minReserve = 0.1f;
-        private float maxPressure = 14.5f;
-        private BoilerDefinition definition;
-        private SteamExhaustDefinition exhaustDefinition;
+        private FireMonitorDefinition definition;
+        private PortReference ignition;
+        private PortReference firePort;
+        private PortReference coalLevel;
+        private PortReference coalCapacity;
+        private Port firing;
+        private Port state;
+        private Port mode;
+        //private Port usage;
 
-        public State State { get
-            {
-                if (Firing && SufficientReserve)
-                {
-                    return State.Running;
-                } else if (Firing) {
-                    return State.WaterOut;
-                } else if (FireOn)
-                {
-                    return State.ShuttingDown;
-                } else
-                {
-                    return State.Off;
-                }
-            }
+        public FireMonitor(FireMonitorDefinition definition) : base(definition.ID)
+        {
+            damperIn = base.AddPortReference(definition.damperIn);
+            blowerIn = base.AddPortReference(definition.blowerIn);
+            airflow = base.AddPortReference(definition.airflow);
+            boilerPressure = base.AddPortReference(definition.boilerPressure);
+            boilerWaterLevel = base.AddPortReference(definition.boilerWaterLevel);
+            waterNormalized = base.AddPortReference(definition.waterNormalized);
+            fireboxTemp = base.AddPortReference(definition.fireboxTemp);
+            ignition = base.AddPortReference(definition.ignition);
+            firePort = base.AddPortReference(definition.firePort);
+            coalLevel = base.AddPortReference(definition.coalLevel);
+            coalCapacity = base.AddPortReference(definition.coalCapacity);
+            firing = base.AddPort(definition.firing);
+            state = base.AddPort(definition.condition);
+            mode = base.AddPort(definition.mode, (float)Mode.Dismissed);
+            //usage = base.AddPort(definition.usage);
+            shovelController = definition.shoveling;
+            this.definition = definition;
         }
 
-        public Mode Mode { get; set; }
+        private State CalculateState()
+        {
+            if (Firing && SufficientReserve)
+            {
+                return State.Running;
+            }
+            else if (Firing)
+            {
+                return State.WaterOut;
+            }
+            else if (FireOn)
+            {
+                return State.ShuttingDown;
+            }
+            else
+            {
+                return State.Off;
+            }
+        }
+        public State State
+        {
+            get
+            {
+                return (State)state.Value;
+            }
+        }
+        public Mode Mode
+        {
+            get
+            {
+                return (Mode)mode.Value;
+            }
+            set
+            {
+                mode.Value = (float)value;
+            }
+        }
         public bool Firing { get
             {
-                return Mode != Mode.Off && Mode != Mode.Dismissed;
+                var selectedMode = (Mode)mode.Value;
+                return selectedMode != Mode.Off && selectedMode != Mode.Dismissed;
             }
-        }
-
-        protected void Start()
-        {
-            Mode = Mode.Off;
-            var trainCar = this.GetComponentInParent<TrainCar>();
-            if (null == trainCar)
-            {
-                Destroy(this);
-                FireManAssist.Logger.Log("No TrainCar found");
-                return;
-            }
-            var simController = trainCar.GetComponent<SimController>();
-            if (null == simController)
-            {
-                Destroy(this);
-                FireManAssist.Logger.Log("No SimController found");
-                return;
-            }
-            definition = trainCar.GetComponentInChildren<BoilerDefinition>();
-            if (null == definition)
-            {
-                Destroy(this);
-                FireManAssist.Logger.Log("No Boiler Definition Found");
-                return;
-            }
-            exhaustDefinition = trainCar.GetComponentInChildren<SteamExhaustDefinition>();
-            WaterMonitor = trainCar.GetComponent<WaterMonitor>();
-            WaterMonitor.FireMonitor = this;
-            fireController = trainCar.GetComponent<SimController>().firebox;
-            shovelController = trainCar.GetComponent<MagicShoveling>();
-            simController.SimulationFlow.TryGetPort("damper.EXT_IN", out this.damperIn);
-            simController.SimulationFlow.TryGetPort("blower.EXT_IN", out this.blowerIn);
-            simController.SimulationFlow.TryGetPort(definition.ID + "." + definition.pressureReadOut.ID, out this.boilerPressure);
-            simController.SimulationFlow.TryGetPort(exhaustDefinition.ID + "." + exhaustDefinition.airFlowReadOut.ID, out this.airflow);
-            var fireboxTempPortId = simController.connectionsDefinition.portReferenceConnections.First(portReferenceConnection => portReferenceConnection.portReferenceId == definition.ID + "." + definition.fireboxTemperature.ID)
-                .portId;
-            simController.SimulationFlow.TryGetPort(fireboxTempPortId, out this.fireboxTemp);
-            // TODO: Start going through orderedsimcomps for the components that I want to use - specifically 
-            // I need the boiler in order to get it's water consumption port reference so I can get it's water port.
-            string waterSource = simController.connectionsDefinition.portReferenceConnections.First(connection => connection.portReferenceId == definition.ID + "." + definition.water.ID)
-                .portId.Split('.')[0];
-            simController.SimulationFlow.TryGetPort(waterSource + ".NORMALIZED", out this.waterCapacity);
-            maxPressure = definition.safetyValveOpeningPressure;
-            StartCoroutine(FiremanUpdate());
         }
 
         public Single AirFlow => airflow.Value;
         public Single Pressure => boilerPressure.Value;
-        public Boolean FireOn => fireController.IsFireOn;
-        public Single FireboxContentsNormalized => fireController.FireboxContents / fireController.FireboxCapacity;
-        public Single WaterReserve => this.waterCapacity.Value;
-        public bool SufficientReserve => this.waterCapacity.Value >= this.minReserve;
+        public Boolean FireOn => firePort.Value > 0;
+        public Single FireboxContentsNormalized => coalLevel.Value / coalCapacity.Value;
+        public Single WaterReserve => this.waterNormalized.Value;
+        public bool SufficientReserve => this.waterNormalized.Value >= this.minReserve;
+        public Single MaxPressure => definition.boiler.safetyValveOpeningPressure;
+        public Single PassiveExhaust => definition.steamExhaust.passiveExhaust;
+        public Single MaxBlowerFlow => definition.steamExhaust.maxBlowerFlow;
+        public Single MinWaterLevel => definition.boiler.crownSheetNormalizedWaterLevel;
 
         private Single Normalize(Single value, Single min, Single max)
         {
             return Math.Max(0.0f, Math.Min(1.0f, (value - min) / (max - min)));
         }
-        protected IEnumerator FiremanUpdate()
+        private float Waiting { get; set; } = 0.0f;
+        private IEnumerator<float> _Sequence;
+        private IEnumerator<float> Sequence { get
+            {
+                if (_Sequence == null)
+                {
+                    _Sequence = FiremanUpdate();
+                }
+                return _Sequence;
+            } }
+        protected IEnumerator<float> FiremanUpdate()
         {
             float t_dot = 0.0f;
             float t_ddot = 0.0f;
@@ -152,36 +168,32 @@ namespace FireManAssist
                 // wait 1.25 seconds before doing anything fire related
                 for (int i = 0; i < 4; i++)
                 {
-                    if (FireOn && FireManAssist.Settings.FiremanManagesBlowerAndDamper && Mode != Mode.Dismissed)
+                    if (FireOn && FireManAssist.Settings.FiremanManagesBlowerAndDamper && (Mode)mode.Value != Mode.Dismissed)
                     {
-                        damperIn.ExternalValueUpdate(lastSetDamper);
+                        damperIn.Value = lastSetDamper;
                         UpdateDamperAndBlower();
                     }
-                    foreach (var yieldInstruction in WaitForUnpaused(0.25f)) yield return yieldInstruction;
+                    yield return 0.25f;
                 }
+                //FireManAssist.Logger.Log("Updating actions");
                 if (Firing && FireOn && SufficientReserve && FireManAssist.Settings.FireMode != FireAssistMode.None)
                 {
-                    FireManAssist.Logger.Log(Time.time + ": Deciding whether to add coal");
                     updateDeltas(Pressure, fireboxTemp.Value, ref t_dot, ref p_dot, ref t_ddot, ref p_ddot, ref lastPressure, ref lastTemperature);
-                    FireManAssist.Logger.Log("\tt_dot: " + t_dot + "\tt_ddot: " + t_ddot);
-                    FireManAssist.Logger.Log("\tp_dot: " + p_dot + "\tp_ddot: " + p_ddot);
-                    FireManAssist.Logger.Log("\tt: " + fireboxTemp.Value + "\tp: " + Pressure);
-                    FireManAssist.Logger.Log("\tseconds: " + secondsSinceLastCoal);
                     // It's simple, if pressure isn't rising and we're below target, add coal, make hot.
                     // Don't even try if we're above this pressure
                     var lowPressureThreshold = 1.0f;
-                    if (Mode == Mode.Shunt)
+                    if ((Mode)mode.Value == Mode.Shunt)
                     {
                         lowPressureThreshold = 2.0f;
                     }
-                    bool shouldAddCoal = Pressure < (maxPressure - lowPressureThreshold);
+                    bool shouldAddCoal = Pressure < (MaxPressure - lowPressureThreshold);
                     shouldAddCoal &= determineCoalByTimeAndDeltas(secondsSinceLastCoal, t_dot, t_ddot, p_dot, p_ddot);
                     // extra handle, if we're really low and coal is below 25% full, add more
-                    shouldAddCoal = shouldAddCoal && (Mode != Mode.Idle || FireboxContentsNormalized < 0.01f);
-                    shouldAddCoal = shouldAddCoal || (Pressure < (maxPressure - 4.0f) && FireboxContentsNormalized < 0.25f);
-                    FireManAssist.Logger.Log("Add coal: " + shouldAddCoal);
+                    shouldAddCoal = shouldAddCoal && ((Mode)mode.Value != Mode.Idle || FireboxContentsNormalized < 0.01f);
+                    shouldAddCoal = shouldAddCoal || (Pressure < (MaxPressure - 4.0f) && FireboxContentsNormalized < 0.15f);
                     if (shouldAddCoal)
                     {
+                        FireManAssist.Logger.Log("Adding coal");
                         shovelController.AddCoalToFirebox(1);
                         secondsSinceLastCoal = 0;
                     } else
@@ -189,13 +201,13 @@ namespace FireManAssist
                         secondsSinceLastCoal++;
                     }
                 }
-                else if (Firing && SufficientReserve && FireManAssist.Settings.FireMode == FireAssistMode.Full && WaterMonitor.WaterLevel >= 0.75f)
+                else if (Firing && SufficientReserve && FireManAssist.Settings.FireMode == FireAssistMode.Full && boilerWaterLevel.Value >= MinWaterLevel)
                 {
                     FireManAssist.Logger.Log("Igniting fire");
                     // get a fire going because we're supposed to be on, but we're not.
                     shovelController.AddCoalToFirebox(1);
                     secondsSinceLastCoal = 0;
-                    fireController.Ignite();
+                    ignition.Value = 1f;
                 }
             }
         }
@@ -215,13 +227,14 @@ namespace FireManAssist
             float min_p_ddot = -0.05f;
             int mediumInterval = 2;
             int longInterval = 5;
-            if (Mode == Mode.Shunt)
+            if ((Mode)mode.Value == Mode.Shunt)
             {
                 min_t_ddot = -1.0f;
                 min_p_ddot = -0.5f;
                 mediumInterval = 5;
                 longInterval = 10;
             }
+            //FireManAssist.Logger.Log("Determining coal\nt_dot: " + t_dot + "\tt_ddot: " + t_ddot + "\tp_dot: " + p_dot + "\tp_ddot: " + p_ddot);
             if (secondsSinceLastCoal > longInterval && (t_dot < min_t_ddot || p_dot < 0))
             {
                 return true;
@@ -247,14 +260,6 @@ namespace FireManAssist
             lastPressure = pressure;
         }
 
-        private IEnumerable WaitForUnpaused(float seconds)
-        {
-            yield return new WaitForSeconds(seconds);
-            yield return new WaitUntil(() =>
-                !AppUtil.Instance.IsTimePaused
-            );
-        }
-
         private void UpdateDamperAndBlower()
         {
             if (FireManAssist.Settings.FiremanManagesBlowerAndDamper)
@@ -264,21 +269,64 @@ namespace FireManAssist
                 // at which point we want damper full.
                 // We prefer to max out damper at this point as coal lasts longer than water, and it's better to waste a bit of coal burning poorly than to
                 // waste water popping the safety.
-                lastSetDamper = FireManAssist.CalculateIntervalFromCurve(Pressure, 0.5f, maxPressure - 1.0f, maxPressure - 0.5f, 0.2f);
+                lastSetDamper = FireManAssist.CalculateIntervalFromCurve(Pressure, 0.5f, MaxPressure - 1.0f, MaxPressure - 0.5f, 0.2f);
                 // If we're still in startup mode, or airflow is abysmal (because we're moving very slowly) then turn on the blower - this is especially useful
                 // to get pressure built back up after a hill if the driver closes the throttle which reduces airflow
-                if ((Pressure <= (maxPressure - 3.0f) && AirFlow <= (exhaustDefinition.passiveExhaust + exhaustDefinition.maxBlowerFlow)) && lastSetDamper >= 0.99f)
+                if ((Pressure <= (MaxPressure - 3.0f) && AirFlow <= (PassiveExhaust + MaxBlowerFlow)) && lastSetDamper >= 0.99f)
                 {
-                    blowerIn.ExternalValueUpdate(1.0f);
+                    blowerIn.Value = 1.0f;
                 }
                 // if pressure is high and airflow is still moderate or if airflow has started in earnest, or the damper is 
                 // being closed, then we definitely don't want the blower.
-                else if (Pressure >= (maxPressure - 1.5f) || AirFlow > (exhaustDefinition.passiveExhaust + (2 * exhaustDefinition.maxBlowerFlow)) || lastSetDamper <0.99f)
+                else if (Pressure >= (MaxPressure - 1.5f) || AirFlow > (PassiveExhaust + (2 * MaxBlowerFlow)) || lastSetDamper <0.99f)
                 {
-                    blowerIn.ExternalValueUpdate(0.0f);
+                    blowerIn.Value = 0.0f;
                 }
 
             }
+        }
+
+        public override void Tick(float delta)
+        {
+            if (this.firing.Value == 0 && (this.FireOn || (this.Mode != Mode.Dismissed && this.Mode != Mode.Off))) {
+                this.firing.Value = 1;
+            } else if (this.firing.Value == 1 && (!this.FireOn && (this.Mode == Mode.Dismissed || this.Mode == Mode.Off))) {
+                this.firing.Value = 0;
+            }
+            UpdateState();
+            if (Waiting > 0.0f)
+            {
+                Waiting -= delta;
+                return;
+            }
+            Sequence.MoveNext();
+            Waiting = Sequence.Current;
+            if (this.Firing && FireManAssist.Settings.FiremanCostsFess)
+            {
+                //usage.Value += delta;
+            }
+        }
+
+        private void UpdateState()
+        {
+            var state = CalculateState();
+            if (this.State != state)
+            {
+                this.state.Value = (float)state;
+            }
+        }
+        public override bool HasSaveData { get { return true; } }
+        public override JObject GetSaveStateData()
+        {
+            var saveData = new JObject();
+            saveData.SetInt("mode", (int)(this.mode.Value));
+            //saveData.SetFloat("usage", this.usage.Value);
+            return saveData;
+        }
+        public override void SetSaveStateData(JObject savedData)
+        {
+            this.mode.Value = savedData.GetInt("mode") ?? (int)Mode.Dismissed;
+            //this.usage.Value = savedData.GetFloat("usage") ?? 0.0f;
         }
     }
 }
