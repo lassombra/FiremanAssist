@@ -67,6 +67,7 @@ namespace FireManAssist
         private BoilerDefinition boilerDefinition;
 
         private float minWater;
+        private float maxWater;
         private float lastCylinderWater = 0.0f;
         private float aspectRatio;
 
@@ -110,6 +111,25 @@ namespace FireManAssist
             }
             FireMonitor = trainCar.GetComponentInChildren<FireModeController>();
             minWater = boilerDefinition.crownSheetNormalizedWaterLevel;
+            maxWater = boilerDefinition.steamOutletNormalizedWaterLevel - .02f;
+            foreach (var indicator in trainCar.GetComponentsInChildren<LocoIndicatorReader>())
+            {
+                if (indicator.locoWaterLevel != null)
+                {
+                    minWater = indicator.locoWaterLevel.minValue;
+                    maxWater = indicator.locoWaterLevel.maxValue;
+                    break;
+                }
+            }
+            foreach(var indicator in trainCar.interior.GetComponentsInChildren<LocoIndicatorReader>())
+            {
+                if (indicator.locoWaterLevel != null)
+                {
+                    minWater = indicator.locoWaterLevel.minValue;
+                    maxWater = indicator.locoWaterLevel.maxValue;
+                    break;
+                }
+            }
             simController.SimulationFlow.TryGetPort("firebox.FIRE_ON", out this.firePort);
             simController.SimulationFlow.TryGetPort("injector.EXT_IN", out this.injector);
             simController.SimulationFlow.TryGetPort("blowdown.EXT_IN", out this.blowdown);
@@ -197,7 +217,7 @@ namespace FireManAssist
             updateInjector = updateInjector || (injectorTarget >= 0.0f && lastSetInjector != injectorTarget);
             updateInjector = updateInjector && slowUpdateFrame;
             updateInjector = updateInjector || (minWater > waterLevel && injectorTarget > 0.0f);
-            updateInjector = updateInjector || (minWater+0.1f < waterLevel);
+            updateInjector = updateInjector || (maxWater < waterLevel);
             updateInjector = updateInjector && (firePort.Value > 0.0f || FireMonitor.Firing || waterLevel >= minWater + 0.05f);
             if (updateInjector)
             {
@@ -212,12 +232,12 @@ namespace FireManAssist
         /// </summary>
         /// <param name="curve">The curve to use to determine the injector target</param>
         /// <param name="waterLevel">The current water level</param>
-        public static float CalculateInjectorTargetCurve(float waterLevel, WaterCurve curve, float minWater)
+        public static float CalculateInjectorTargetCurve(float waterLevel, WaterCurve curve, float minWater, float maxWater)
         {
             var min = minWater + 0.04f;
             var low = min + 0.01667f;
-            var max = minWater + 0.1f;
-            var nominal = minWater + 0.06667f;
+            var max = Math.Max(maxWater, minWater + 0.1f);
+            var nominal = (((max - min) / 3) * 2) + min;
             switch (curve)
             {
                 case WaterCurve.LowPressure:
@@ -306,7 +326,7 @@ namespace FireManAssist
                     lowPressure = false;
                     highPressure = false;
                 }
-                return CalculateInjectorTargetCurve(waterLevel, curve, minWater);
+                return CalculateInjectorTargetCurve(waterLevel, curve, minWater, maxWater);
             } else
             {
                 // we had a fire, now we don't, initially turn off the injector.  User can turn it back on (to prime for example) but otherwise we'll just fall through to OverUnderHandler
@@ -322,7 +342,7 @@ namespace FireManAssist
         {
             // If water level is above 0.85, turn off injector.
             // otherwise fall through to MinimumHandler
-            if (waterLevel > minWater + 0.1f)
+            if (waterLevel > maxWater)
             {
                 overrideTriggered = false;
                 return 0.0f;
