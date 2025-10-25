@@ -35,6 +35,9 @@ namespace FireManAssist.Radio
                 case Mode.Dismissed:
                     actionText = "Dismiss";
                     break;
+                case Mode.Maintenance:
+                    actionText = "Restock";
+                    break;
                 case Mode.Idle:
                     actionText = "Minimum Fire";
                     break;

@@ -29,7 +29,8 @@ namespace FireManAssist
         Off,
         Idle,
         Shunt,
-        Road
+        Road,
+        Maintenance,
     }
     public class FireMonitor : SimComponent
     {
@@ -58,6 +59,7 @@ namespace FireManAssist
         private PortReference firePort;
         private PortReference coalLevel;
         private PortReference coalCapacity;
+        private PortReference bunkerCoal;
         private Port firing;
         private Port state;
         private Port mode;
@@ -76,6 +78,7 @@ namespace FireManAssist
             firePort = base.AddPortReference(definition.firePort);
             coalLevel = base.AddPortReference(definition.coalLevel);
             coalCapacity = base.AddPortReference(definition.coalCapacity);
+            bunkerCoal = base.AddPortReference(definition.bunkerNormalized);
             firing = base.AddPort(definition.firing);
             state = base.AddPort(definition.condition);
             mode = base.AddPort(definition.mode, (float)Mode.Dismissed);
@@ -187,10 +190,17 @@ namespace FireManAssist
                         lowPressureThreshold = 2.0f;
                     }
                     bool shouldAddCoal = Pressure < (MaxPressure - lowPressureThreshold);
-                    shouldAddCoal &= determineCoalByTimeAndDeltas(secondsSinceLastCoal, t_dot, t_ddot, p_dot, p_ddot);
-                    // extra handle, if we're really low and coal is below 25% full, add more
-                    shouldAddCoal = shouldAddCoal && ((Mode)mode.Value != Mode.Idle || FireboxContentsNormalized < 0.01f);
-                    shouldAddCoal = shouldAddCoal || (Pressure < (MaxPressure - 4.0f) && FireboxContentsNormalized < 0.15f);
+                    if (Mode != Mode.Maintenance)
+                    {
+                        shouldAddCoal &= determineCoalByTimeAndDeltas(secondsSinceLastCoal, t_dot, t_ddot, p_dot, p_ddot);
+                        // extra handle, if we're really low and coal is below 25% full, add more
+                        shouldAddCoal = shouldAddCoal && ((Mode)mode.Value != Mode.Idle || FireboxContentsNormalized < 0.01f);
+                        shouldAddCoal = shouldAddCoal || (Pressure < (MaxPressure - 4.0f) && FireboxContentsNormalized < 0.15f);
+                    } else
+                    {
+                        shouldAddCoal &= FireboxContentsNormalized < 0.25f; // in maintenance mode, we maintain about 25% coal level until we fill the bunker
+                        shouldAddCoal &= bunkerCoal.Value < 0.95f; // we don't want to add coal if the bunker is full, as we take that to mean we just filled it
+                    }
                     if (shouldAddCoal)
                     {
                         FireManAssist.Logger.Log("Adding coal");
@@ -269,16 +279,25 @@ namespace FireManAssist
                 // at which point we want damper full.
                 // We prefer to max out damper at this point as coal lasts longer than water, and it's better to waste a bit of coal burning poorly than to
                 // waste water popping the safety.
-                lastSetDamper = FireManAssist.CalculateIntervalFromCurve(Pressure, 0.5f, MaxPressure - 1.0f, MaxPressure - 0.5f, 0.2f);
-                // If we're still in startup mode, or airflow is abysmal (because we're moving very slowly) then turn on the blower - this is especially useful
-                // to get pressure built back up after a hill if the driver closes the throttle which reduces airflow
-                if ((Pressure <= (MaxPressure - 3.0f) && AirFlow <= (PassiveExhaust + MaxBlowerFlow)) && lastSetDamper >= 0.99f)
+                if (this.Mode != Mode.Maintenance)
                 {
-                    blowerIn.Value = 1.0f;
+                    lastSetDamper = FireManAssist.CalculateIntervalFromCurve(Pressure, 0.5f, MaxPressure - 1.0f, MaxPressure - 0.5f, 0.2f);
+                    // If we're still in startup mode, or airflow is abysmal (because we're moving very slowly) then turn on the blower - this is especially useful
+                    // to get pressure built back up after a hill if the driver closes the throttle which reduces airflow
+
+                    if ((Pressure <= (MaxPressure - 3.0f) && AirFlow <= (PassiveExhaust + MaxBlowerFlow)) && lastSetDamper >= 0.99f)
+                    {
+                        blowerIn.Value = 1.0f;
+                    }
+                } if (this.Mode == Mode.Maintenance)
+                {
+                    // In maintenance mode we will close the damper earlier as we are expecting to load quite a bit more coal than normal
+                    // and so we need to keep the firebox cooler.
+                    lastSetDamper = FireManAssist.CalculateIntervalFromCurve(Pressure, 0.5f, MaxPressure - 1.5f, MaxPressure - 1.0f, 0.2f);
                 }
                 // if pressure is high and airflow is still moderate or if airflow has started in earnest, or the damper is 
                 // being closed, then we definitely don't want the blower.
-                else if (Pressure >= (MaxPressure - 1.5f) || AirFlow > (PassiveExhaust + (2 * MaxBlowerFlow)) || lastSetDamper <0.99f)
+                else if (Pressure >= (MaxPressure - 1.5f) || AirFlow > (PassiveExhaust + (2 * MaxBlowerFlow)) || lastSetDamper < 0.99f)
                 {
                     blowerIn.Value = 0.0f;
                 }

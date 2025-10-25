@@ -1,4 +1,5 @@
 ﻿using DV.Simulation.Controllers;
+using LocoSim.Attributes;
 using LocoSim.Definitions;
 using LocoSim.Implementations;
 using System;
@@ -26,6 +27,7 @@ namespace FireManAssist.Manager
         public PortReferenceDefinition firePort = new PortReferenceDefinition(PortValueType.STATE, "FIRE_ON", false);
         public PortReferenceDefinition coalLevel = new PortReferenceDefinition(PortValueType.COAL, "COAL_LEVEL", false);
         public PortReferenceDefinition coalCapacity = new PortReferenceDefinition(PortValueType.COAL, "COAL_CAPACITY", false);
+        public PortReferenceDefinition bunkerNormalized = new PortReferenceDefinition(PortValueType.COAL, "BUNKER_NORMALIZED", false);
         public PortDefinition firing = new PortDefinition(PortType.READONLY_OUT, PortValueType.STATE, "FIRING");
         public PortDefinition condition = new PortDefinition(PortType.READONLY_OUT, PortValueType.STATE, "CONDITION");
         public PortDefinition mode = new PortDefinition(PortType.EXTERNAL_IN, PortValueType.CONTROL, "MODE");
