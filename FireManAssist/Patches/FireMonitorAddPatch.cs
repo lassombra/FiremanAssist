@@ -65,11 +65,17 @@ namespace FireManAssist.Patches
             var boiler = definition.boiler;
             var connections = prefab.GetComponentInChildren<SimConnectionDefinition>();
             var onBoardWater = prefab.GetComponentInChildren<WaterContainerDefinition>();
+            var onBoardCoal = prefab.GetComponentInChildren<CoalContainerDefinition>();
             var tenderWater = (from c in prefab.GetComponentsInChildren<BroadcastPortValueConsumer>()
                                where c.connectionTag.ToLower().Contains("tender")
                                where c.connectionTag.ToLower().Contains("normalized")
                                where c.connectionTag.ToLower().Contains("water")
                                select c).FirstOrDefault();
+            var tenderCoal = (from c in prefab.GetComponentsInChildren<BroadcastPortValueConsumer>()
+                              where c.connectionTag.ToLower().Contains("tender")
+                              where c.connectionTag.ToLower().Contains("normalized")
+                              where c.connectionTag.ToLower().Contains("coal")
+                              select c).FirstOrDefault();
             string waterPort = null;
             if (onBoardWater != null)
             {
@@ -77,6 +83,14 @@ namespace FireManAssist.Patches
             } else if (tenderWater != null)
             {
                 waterPort = tenderWater.consumerPortId;
+            }
+            string coalPort = null;
+            if (onBoardCoal != null)
+            {
+                coalPort = PortHelpers.MakePortId(onBoardCoal, onBoardCoal.normalizedReadOut);
+            } else if (tenderCoal != null)
+            {
+                coalPort = tenderCoal.consumerPortId;
             }
             var newDefinitions = new PortReferenceConnection[]
             {
@@ -91,6 +105,7 @@ namespace FireManAssist.Patches
                 new PortReferenceConnection(PortHelpers.MakePortId(definition, definition.coalLevel), PortHelpers.MakePortId(fireboxDefinition, fireboxDefinition.coalLevelReadOut)),
                 new PortReferenceConnection(PortHelpers.MakePortId(definition, definition.coalCapacity), PortHelpers.MakePortId(fireboxDefinition, fireboxDefinition.coalCapacityReadOut)),
                 new PortReferenceConnection(PortHelpers.MakePortId(definition, definition.waterNormalized), waterPort ?? ""),
+                new PortReferenceConnection(PortHelpers.MakePortId(definition, definition.bunkerNormalized), coalPort ?? "")
             };
             connections.executionOrder = connections.executionOrder.AddItem(definition).ToArray();
             connections.portReferenceConnections = connections.portReferenceConnections.AddRangeToArray(newDefinitions);

@@ -1,9 +1,13 @@
 ﻿using DV.HUD;
 using DV.Simulation.Cars;
+using DV.Simulation.Controllers;
+using DV.UI;
 using FireManAssist.Manager;
 using LocoSim.Definitions;
 using LocoSim.Implementations;
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 
 namespace FireManAssist
@@ -44,6 +48,8 @@ namespace FireManAssist
 
         //Control to open / close the cylinder cocks
         private Port cylinderCocks;
+
+        private Port storageWater;
 
 
         // Whether or not the "full" mode is actively running
@@ -131,7 +137,7 @@ namespace FireManAssist
                 }
             }
             simController.SimulationFlow.TryGetPort("firebox.FIRE_ON", out this.firePort);
-            simController.SimulationFlow.TryGetPort("injector.EXT_IN", out this.injector);
+            this.injector = loadInjectorPort(trainCar, simController, boilerDefinition);
             simController.SimulationFlow.TryGetPort("blowdown.EXT_IN", out this.blowdown);
             simController.SimulationFlow.TryGetPort(boilerDefinition.ID + "." + boilerDefinition.pressureReadOut.ID, out this.boilerPressure);
             simController.SimulationFlow.TryGetPort("boiler.BOILER_ANGLE_EXT_IN", out this.angleExtIn);
@@ -139,8 +145,124 @@ namespace FireManAssist
             simController.SimulationFlow.TryGetPort(engineDefinition.ID + "." + engineDefinition.cylinderTemperatureReadOut.ID, out this.cylinderTemperature);
             simController.SimulationFlow.TryGetPort(engineDefinition.ID + "." + engineDefinition.waterInCylindersNormalizedReadOut.ID, out this.cylinderWater);
             aspectRatio = boilerDefinition.length / boilerDefinition.diameter;
-            
+            var waterContainer = trainCar.GetComponentInChildren<WaterContainerDefinition>();
+            if (waterContainer != null)
+            {
+                // if we have a water container, use that as the storage water port
+                simController.SimulationFlow.TryGetPort(waterContainer.ID + "." + waterContainer.normalizedReadOut.ID, out this.storageWater);
+            }
+            else
+            {
+                var tenderWater = (from c in simController.broadcastPortController.consumers
+                                   where c.connectionTag.ToLower().Contains("tender")
+                                   where c.connectionTag.ToLower().Contains("normalized")
+                                   where c.connectionTag.ToLower().Contains("water")
+                                   select c).FirstOrDefault();
+                simController.SimulationFlow.TryGetPort(tenderWater.consumerPortId, out this.storageWater);
+            }
         }
+
+        private Port loadInjectorPort(TrainCar trainCar, SimController simController, BoilerDefinition boilerDefinition)
+        {
+            FireManAssist.Logger.Log("Loading injector port");
+            var controls = loadControls(trainCar);
+            FireManAssist.Logger.Log("Loaded " + controls.Count + " controls");
+            String injectorInPort = boilerDefinition.ID + "." + boilerDefinition.injectorControl.ID;
+            var controlDef = findReferencedControl(controls, injectorInPort, trainCar);
+            if (controlDef != null)
+            {
+                String injectorPortId = controlDef.ID + "." + controlDef.controlExtIn.ID;
+                if (simController.SimulationFlow.TryGetPort(injectorPortId, out var injectorPort))
+                {
+                    return injectorPort;
+                }
+            }
+            return null;
+        }
+
+        private ExternalControlDefinition findReferencedControl(Dictionary<String, ExternalControlDefinition> controls, String targetPortId, TrainCar trainCar)
+        {
+            FireManAssist.Logger.Log("Looking for control for port " + targetPortId);
+            String referencedPortId = (from c in trainCar.SimController.connectionsDefinition.portReferenceConnections
+                                        where c.portReferenceId == targetPortId
+                                        select c.portId).FirstOrDefault();
+            if (referencedPortId != null)
+            {
+                return findControllingPortDefinition(controls, referencedPortId, trainCar);
+            } else
+            {
+                return findControllingPortDefinition(controls, targetPortId, trainCar);
+            }
+        }
+
+        private ExternalControlDefinition findControllingPortDefinition(Dictionary<String, ExternalControlDefinition> controls, String targetPortId, TrainCar trainCar)
+        {
+            FireManAssist.Logger.Log("Finding controlling port definition for " + targetPortId);
+            if (controls.ContainsKey(targetPortId))
+            {
+                FireManAssist.Logger.Log("Found direct control for " + targetPortId);
+                return controls[targetPortId];
+            }
+            else
+            {
+                var multipliers = trainCar.GetComponentsInChildren<ConfigurableMultiplierDefinition>();
+                if (multipliers != null)
+                {
+                    FireManAssist.Logger.Log("Searching multipliers for " + targetPortId);
+                    foreach (var input in multipliers)
+                    {
+                        FireManAssist.Logger.Log("Checking multiplier " + input.ID + ".");
+                        if (input.ID + "." + input.mulReadOut.ID == targetPortId)
+                        {
+                            FireManAssist.Logger.Log("Found multiplier for " + targetPortId + ", " + input.ID);
+                            var definition = findReferencedControl(controls, input.ID +"."+ input.aReader.ID, trainCar);
+                            if (definition != null)
+                            {
+                                return definition;
+                            } else
+                            {
+                                return findReferencedControl(controls, input.ID +"."+ input.bReader.ID, trainCar);
+                            }
+                        }
+                    }
+                }
+                var adders = trainCar.GetComponentsInChildren<ConfigurableAddDefinition>();
+                if (adders != null)
+                {
+                    FireManAssist.Logger.Log("Searching adders for " + targetPortId);
+                    foreach (var input in adders)
+                    {
+                        FireManAssist.Logger.Log("Checking adder " + input.ID + ".");
+                        if (input.ID + "." + input.addReadOut.ID == targetPortId)
+                        {
+                            FireManAssist.Logger.Log("Found adder for " + targetPortId + ", " + input.ID);
+                            var definition = findReferencedControl(controls, input.ID + "." + input.aReader.ID, trainCar);
+                            if (definition != null)
+                            {
+                                return definition;
+                            }
+                            else
+                            {
+                                return findReferencedControl(controls, input.ID + "." + input.bReader.ID, trainCar);
+                            }
+                        }
+                    }
+                }
+            }
+            return null;
+        }
+
+        private Dictionary<String, ExternalControlDefinition> loadControls(TrainCar trainCar)
+        {
+            var controls = trainCar.GetComponentsInChildren<ExternalControlDefinition>();
+            var controlDict = new Dictionary<String, ExternalControlDefinition>();
+            foreach (var control in controls)
+            {
+                controlDict[control.ID + "." + control.controlExtIn.ID] = control;
+            }
+            return controlDict;
+        }
+
         public override void Update()
         {
             if (FireMonitor.Mode != Mode.Dismissed)
@@ -219,7 +341,7 @@ namespace FireManAssist
             updateInjector = updateInjector || (minWater > waterLevel && injectorTarget > 0.0f);
             updateInjector = updateInjector || (maxWater < waterLevel);
             updateInjector = updateInjector && (firePort.Value > 0.0f || FireMonitor.Firing || waterLevel >= minWater + 0.05f);
-            if (updateInjector)
+            if (updateInjector && injector != null)
             {
                 injector.ExternalValueUpdate(injectorTarget);
                 lastSetInjector = injectorTarget;
@@ -294,6 +416,18 @@ namespace FireManAssist
                 // 3) If boiler is above 13 bar, reset lowPressure flag
                 // 4) If boiler is above 14 bar, use high pressure curve
                 // 5) if all else fails, use default curve
+                if (FireMonitor.Mode == Mode.Maintenance)
+                {
+                    // maintenance mode is always about maximizing water level so that when we shutdown, we for sure have enough water
+                    // for next time
+                    if (waterLevel < maxWater - 0.05f && storageWater.Value < 0.95f)
+                    {
+                        return 1.0f;
+                    } else
+                    {
+                        return 0.0f;
+                    }
+                }
                 if (pressure < boilerDefinition.safetyValveOpeningPressure - 5f)
                 {
                     curve = WaterCurve.Startup;

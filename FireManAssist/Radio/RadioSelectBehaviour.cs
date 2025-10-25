@@ -73,6 +73,8 @@ namespace FireManAssist.Radio
                     return "Minimum fire";
                 case Mode.Shunt:
                     return "Shunting fire";
+                case Mode.Maintenance:
+                    return "Restock";
                 case Mode.Road:
                 default:
                     return "Full fire";
