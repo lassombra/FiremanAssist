@@ -6,6 +6,7 @@ using FireManAssist.Manager;
 using LocoSim.Definitions;
 using LocoSim.Implementations;
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
@@ -32,7 +33,7 @@ namespace FireManAssist
         private Port firePort;
 
         // The injector port, to set the injector
-        private Port injector;
+        private Port[] injectors;
         // The blowdown port, to turn off blowdown if on at minimum
         private Port blowdown;
 
@@ -137,7 +138,7 @@ namespace FireManAssist
                 }
             }
             simController.SimulationFlow.TryGetPort("firebox.FIRE_ON", out this.firePort);
-            this.injector = loadInjectorPort(trainCar, simController, boilerDefinition);
+            this.injectors = loadInjectorPorts(trainCar, simController, boilerDefinition);
             simController.SimulationFlow.TryGetPort("blowdown.EXT_IN", out this.blowdown);
             simController.SimulationFlow.TryGetPort(boilerDefinition.ID + "." + boilerDefinition.pressureReadOut.ID, out this.boilerPressure);
             simController.SimulationFlow.TryGetPort("boiler.BOILER_ANGLE_EXT_IN", out this.angleExtIn);
@@ -162,25 +163,26 @@ namespace FireManAssist
             }
         }
 
-        private Port loadInjectorPort(TrainCar trainCar, SimController simController, BoilerDefinition boilerDefinition)
+        private Port[] loadInjectorPorts(TrainCar trainCar, SimController simController, BoilerDefinition boilerDefinition)
         {
-            FireManAssist.Logger.Log("Loading injector port");
+            List<Port> foundPorts = new List<Port>();
+            FireManAssist.Logger.Log("Loading injector port(s) for car "  + trainCar.carLivery.name);
             var controls = loadControls(trainCar);
             FireManAssist.Logger.Log("Loaded " + controls.Count + " controls");
             String injectorInPort = boilerDefinition.ID + "." + boilerDefinition.injectorControl.ID;
-            var controlDef = findReferencedControl(controls, injectorInPort, trainCar);
-            if (controlDef != null)
+            var controlDefs = findReferencedControls(controls, injectorInPort, trainCar);
+            foreach (var controlDef in controlDefs)
             {
                 String injectorPortId = controlDef.ID + "." + controlDef.controlExtIn.ID;
                 if (simController.SimulationFlow.TryGetPort(injectorPortId, out var injectorPort))
                 {
-                    return injectorPort;
+                    foundPorts.Add(injectorPort);
                 }
             }
-            return null;
+            return foundPorts.ToArray();
         }
 
-        private ExternalControlDefinition findReferencedControl(Dictionary<String, ExternalControlDefinition> controls, String targetPortId, TrainCar trainCar)
+        private List<ExternalControlDefinition> findReferencedControls(Dictionary<String, ExternalControlDefinition> controls, String targetPortId, TrainCar trainCar)
         {
             FireManAssist.Logger.Log("Looking for control for port " + targetPortId);
             String referencedPortId = (from c in trainCar.SimController.connectionsDefinition.portReferenceConnections
@@ -195,13 +197,17 @@ namespace FireManAssist
             }
         }
 
-        private ExternalControlDefinition findControllingPortDefinition(Dictionary<String, ExternalControlDefinition> controls, String targetPortId, TrainCar trainCar)
+        private List<ExternalControlDefinition> findControllingPortDefinition(Dictionary<String, ExternalControlDefinition> controls, String targetPortId, TrainCar trainCar)
         {
             FireManAssist.Logger.Log("Finding controlling port definition for " + targetPortId);
             if (controls.ContainsKey(targetPortId))
             {
                 FireManAssist.Logger.Log("Found direct control for " + targetPortId);
-                return controls[targetPortId];
+                var list = new List<ExternalControlDefinition>
+                {
+                    controls[targetPortId]
+                };
+                return list;
             }
             else
             {
@@ -209,20 +215,17 @@ namespace FireManAssist
                 if (multipliers != null)
                 {
                     FireManAssist.Logger.Log("Searching multipliers for " + targetPortId);
+                    
                     foreach (var input in multipliers)
                     {
                         FireManAssist.Logger.Log("Checking multiplier " + input.ID + ".");
                         if (input.ID + "." + input.mulReadOut.ID == targetPortId)
                         {
                             FireManAssist.Logger.Log("Found multiplier for " + targetPortId + ", " + input.ID);
-                            var definition = findReferencedControl(controls, input.ID +"."+ input.aReader.ID, trainCar);
-                            if (definition != null)
-                            {
-                                return definition;
-                            } else
-                            {
-                                return findReferencedControl(controls, input.ID +"."+ input.bReader.ID, trainCar);
-                            }
+                            var list = new List<ExternalControlDefinition>();
+                            list.AddRange(findReferencedControls(controls, input.ID +"."+ input.aReader.ID, trainCar));
+                            list.AddRange(findReferencedControls(controls, input.ID +"."+ input.bReader.ID, trainCar));
+                            return list;
                         }
                     }
                 }
@@ -236,20 +239,16 @@ namespace FireManAssist
                         if (input.ID + "." + input.addReadOut.ID == targetPortId)
                         {
                             FireManAssist.Logger.Log("Found adder for " + targetPortId + ", " + input.ID);
-                            var definition = findReferencedControl(controls, input.ID + "." + input.aReader.ID, trainCar);
-                            if (definition != null)
-                            {
-                                return definition;
-                            }
-                            else
-                            {
-                                return findReferencedControl(controls, input.ID + "." + input.bReader.ID, trainCar);
-                            }
+                            var list = new List<ExternalControlDefinition>();
+                            list.AddRange(findReferencedControls(controls, input.ID + "." + input.aReader.ID, trainCar));
+                            list.AddRange(findReferencedControls(controls, input.ID + "." + input.bReader.ID, trainCar));
+                            return list;
                         }
                     }
                 }
             }
-            return null;
+            FireManAssist.Logger.Log("No controlling port definition found for " + targetPortId);
+            return new List<ExternalControlDefinition>();
         }
 
         private Dictionary<String, ExternalControlDefinition> loadControls(TrainCar trainCar)
@@ -267,7 +266,7 @@ namespace FireManAssist
         {
             if (FireMonitor.Mode != Mode.Dismissed)
             {
-                if (lastSetInjector >= 0.0f && Math.Round(injector.Value, 1) != Math.Round(lastSetInjector, 1) && FireManAssist.Settings.InjectorMode == InjectorOverrideMode.Complete)
+                if (lastSetInjector >= 0.0f && Math.Round(injectors[0].Value, 1) != Math.Round(lastSetInjector, 1) && FireManAssist.Settings.InjectorMode == InjectorOverrideMode.Complete)
                 {
                     // injector has been manually set, disable full service
                     running = false;
@@ -276,7 +275,10 @@ namespace FireManAssist
                 if (FireManAssist.Settings.InjectorMode == InjectorOverrideMode.None && lastSetInjector >= 0.0f &&
                     (firePort.Value > 0.0f || FireMonitor.Firing))
                 {
-                    injector.ExternalValueUpdate(lastSetInjector);
+                    foreach (var injector in injectors)
+                    {
+                        injector.ExternalValueUpdate(lastSetInjector);
+                    }
                 }
             }
             base.Update();
@@ -341,9 +343,12 @@ namespace FireManAssist
             updateInjector = updateInjector || (minWater > waterLevel && injectorTarget > 0.0f);
             updateInjector = updateInjector || (maxWater < waterLevel);
             updateInjector = updateInjector && (firePort.Value > 0.0f || FireMonitor.Firing || waterLevel >= minWater + 0.05f);
-            if (updateInjector && injector != null)
+            if (updateInjector)
             {
-                injector.ExternalValueUpdate(injectorTarget);
+                foreach (var injector in injectors)
+                {
+                    injector.ExternalValueUpdate(injectorTarget);
+                }
                 lastSetInjector = injectorTarget;
             }
         }
